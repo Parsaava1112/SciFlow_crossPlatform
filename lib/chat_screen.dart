@@ -1,0 +1,472 @@
+import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:math_expressions/math_expressions.dart';
+import 'package:shamsi_date/shamsi_date.dart';
+import 'database_helper.dart';
+import 'theme_provider.dart';
+import 'particle_background.dart';
+import 'help_screen.dart';
+
+class ChatScreen extends StatefulWidget {
+  final String username;
+  const ChatScreen({Key? key, required this.username}) : super(key: key);
+
+  @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final _messageController = TextEditingController();
+  final _scrollController = ScrollController();
+  final _dbHelper = DatabaseHelper();
+  final List<ChatMessage> _messages = [];
+  bool _isTyping = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _addMessage(ChatMessage(
+        text: 'سلام ${widget.username}! چطور می‌تونم کمکت کنم؟',
+        isUser: false));
+  }
+
+  void _addMessage(ChatMessage message) {
+    setState(() => _messages.add(message));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+
+    _addMessage(ChatMessage(text: text, isUser: true));
+    _messageController.clear();
+    setState(() => _isTyping = true);
+
+    final questions = _splitQuestions(text);
+    List<String> answers = [];
+    for (var q in questions) {
+      var result = await _processSingleQuestion(q);
+      if (result != null) answers.add(result);
+    }
+
+    if (answers.isEmpty) {
+      final newAnswer = await _showTeachDialog(text);
+      if (newAnswer != null && newAnswer.isNotEmpty) {
+        await _dbHelper.addQA(text, newAnswer);
+        _addMessage(ChatMessage(text: newAnswer, isUser: false));
+        _dbHelper.addChatHistory(widget.username, text, newAnswer);
+      } else {
+        _addMessage(ChatMessage(
+            text: 'متأسفم، فعلاً پاسخی برای این سوال ندارم. 🤔',
+            isUser: false));
+      }
+    } else {
+      String finalAnswer = answers.join('\n\n');
+      _addMessage(ChatMessage(text: finalAnswer, isUser: false));
+      for (int i = 0; i < questions.length && i < answers.length; i++) {
+        _dbHelper.addChatHistory(widget.username, questions[i], answers[i]);
+      }
+    }
+
+    setState(() => _isTyping = false);
+  }
+
+  List<String> _splitQuestions(String text) {
+    final separators = [' و ', '،', ' همچنین ', ' و همچنین '];
+    for (var sep in separators) {
+      if (text.contains(sep)) {
+        return text.split(sep).where((s) => s.trim().isNotEmpty).toList();
+      }
+    }
+    return [text];
+  }
+
+  Future<String?> _processSingleQuestion(String question) async {
+    if (_isGreeting(question)) {
+      final baseAnswer = await _dbHelper.smartSearch(question);
+      if (baseAnswer != null) {
+        final now = Jalali.now();
+        final dateStr = '${now.day} ${now.formatter.mN} ${now.year}';
+        return '$baseAnswer\nامروز $dateStr است.';
+      }
+      return null;
+    }
+
+    String? unitResult = _tryConvertUnit(question);
+    if (unitResult != null) return unitResult;
+
+    String? mathResult = _tryEvaluateMath(question);
+    if (mathResult != null) return mathResult;
+
+    final result = await _dbHelper.smartSearchWithScore(question);
+    if (result != null) {
+      String answer = result['answer'];
+      double score = result['score'];
+      String percentage = (score * 100).toStringAsFixed(1);
+      answer += '\n(میزان تطابق: $percentage٪)';
+      return answer;
+    }
+    return null;
+  }
+
+  bool _isGreeting(String text) {
+    final greetings = ['سلام', 'درود', 'سلام علیکم', 'خوبی', 'چطوری', 'سلامت'];
+    return greetings.any((g) => text.contains(g));
+  }
+
+  String? _tryConvertUnit(String input) {
+    final regex = RegExp(r'(\d+(?:\.\d+)?)\s*(\S+)\s+به\s+(\S+)');
+    final match = regex.firstMatch(input);
+    if (match == null) return null;
+
+    double value = double.tryParse(match.group(1)!) ?? 0;
+    String from = match.group(2)!.toLowerCase().replaceAll('?', '');
+    String to = match.group(3)!.toLowerCase().replaceAll('?', '');
+
+    const unitMap = {
+      'کیلومتر': 'km', 'متر': 'm', 'سانتی‌متر': 'cm', 'مایل': 'mile',
+      'کیلوگرم': 'kg', 'گرم': 'g', 'پوند': 'lb',
+      'سانتی‌گراد': 'celsius', 'فارنهایت': 'fahrenheit',
+      'درجه سانتی‌گراد': 'celsius', 'درجه فارنهایت': 'fahrenheit',
+    };
+
+    String? fromUnit = unitMap[from];
+    String? toUnit = unitMap[to];
+    if (fromUnit == null || toUnit == null) return null;
+
+    try {
+      double result = _convertUnitManually(value, fromUnit, toUnit);
+      if (result.isNaN) return null;
+      return '$value $from = ${result.toStringAsFixed(2)} $to';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  double _convertUnitManually(double value, String from, String to) {
+    if (from == 'celsius' && to == 'fahrenheit') return value * 9 / 5 + 32;
+    if (from == 'fahrenheit' && to == 'celsius') return (value - 32) * 5 / 9;
+
+    const toBase = {
+      'km': 1000.0, 'm': 1.0, 'cm': 0.01, 'mile': 1609.34,
+      'kg': 1.0, 'g': 0.001, 'lb': 0.453592,
+    };
+    const fromBase = {
+      'km': 1 / 1000.0, 'm': 1.0, 'cm': 100.0, 'mile': 1 / 1609.34,
+      'kg': 1.0, 'g': 1000.0, 'lb': 1 / 0.453592,
+    };
+
+    double inBase = value * (toBase[from] ?? 1.0);
+    return inBase * (fromBase[to] ?? 1.0);
+  }
+
+  String? _tryEvaluateMath(String input) {
+    final mathRegex = RegExp(r'^[\d+\-*/().\s]+$');
+    if (!mathRegex.hasMatch(input)) return null;
+    try {
+      final exp = Parser().parse(input);
+      final result = exp.evaluate(EvaluationType.REAL, ContextModel());
+      return '$input = $result';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _showTeachDialog(String question) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('یادگیری'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('من جواب این سوال را نمی‌دانم:\n"$question"\nلطفاً پاسخ صحیح را وارد کنید:'),
+            const SizedBox(height: 12),
+            TextField(controller: controller,
+                decoration: const InputDecoration(hintText: 'پاسخ...', border: OutlineInputBorder())),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('انصراف')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('ذخیره')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    return Scaffold(
+      body: Stack(
+        children: [
+          const ParticleBackground(),
+          Column(
+            children: [
+              _buildAppBar(themeProvider),
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  itemCount: _messages.length + (_isTyping ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == _messages.length && _isTyping) {
+                      return const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text('بات در حال تایپ...', style: TextStyle(color: Colors.grey)),
+                      );
+                    }
+                    return _buildMessageBubble(_messages[index]);
+                  },
+                ),
+              ),
+              _buildInputArea(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  AppBar _buildAppBar(ThemeProvider themeProvider) {
+    return AppBar(
+      title: Text('کاربر: ${widget.username}'),
+      actions: [
+        IconButton(
+          icon: Icon(themeProvider.themeMode == ThemeMode.dark
+              ? Icons.light_mode
+              : Icons.dark_mode),
+          onPressed: () {
+            themeProvider.setTheme(
+              themeProvider.themeMode == ThemeMode.dark
+                  ? ThemeMode.light
+                  : ThemeMode.dark,
+            );
+          },
+        ),
+        IconButton(
+          icon: const FaIcon(FontAwesomeIcons.circleQuestion),
+          onPressed: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const HelpScreen())),
+        ),
+        IconButton(
+          icon: const FaIcon(FontAwesomeIcons.clockRotateLeft),
+          onPressed: () => _showHistory(),
+        ),
+        IconButton(
+          icon: const FaIcon(FontAwesomeIcons.rightFromBracket),
+          onPressed: () => Navigator.pushReplacementNamed(context, '/'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMessageBubble(ChatMessage msg) {
+    final borderRadius = msg.isUser
+        ? const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(4),
+          )
+        : const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(4),
+            bottomRight: Radius.circular(16),
+          );
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 400),
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 30),
+            child: child,
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (!msg.isUser)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.indigo.shade400,
+                  child: const FaIcon(FontAwesomeIcons.robot, color: Colors.white, size: 20),
+                ),
+              ),
+            Flexible(
+              child: Container(
+                constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.7),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: msg.isUser ? Colors.green.shade700 : Colors.grey.shade800,
+                  borderRadius: borderRadius,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(msg.text,
+                        style: const TextStyle(color: Colors.white, fontSize: 16),
+                        textDirection: TextDirection.rtl),
+                    if (!msg.isUser)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            InkWell(
+                              onTap: () => _rateAnswer(msg, true),
+                              child: const Icon(Icons.thumb_up_alt_outlined, size: 16, color: Colors.greenAccent),
+                            ),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () => _rateAnswer(msg, false),
+                              child: const Icon(Icons.thumb_down_alt_outlined, size: 16, color: Colors.redAccent),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            if (msg.isUser)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.green,
+                  child: const FaIcon(FontAwesomeIcons.user, size: 20, color: Colors.white),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _rateAnswer(ChatMessage msg, bool like) async {
+    String? lastQuestion;
+    for (int i = _messages.indexOf(msg) - 1; i >= 0; i--) {
+      if (_messages[i].isUser) {
+        lastQuestion = _messages[i].text;
+        break;
+      }
+    }
+    if (lastQuestion != null) {
+      await _dbHelper.rateAnswer(widget.username, lastQuestion, like);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(like ? '👍 متشکرم!' : '👎 ثبت شد.')),
+      );
+    }
+  }
+
+  Widget _buildInputArea() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).bottomAppBarTheme.color ?? const Color(0xFF1F2937),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _messageController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'پیام خود را بنویسید...',
+                hintStyle: TextStyle(color: Colors.grey[400]),
+                filled: true,
+                fillColor: Colors.grey[800],
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                    borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                prefixIcon: const FaIcon(FontAwesomeIcons.pen, size: 16, color: Colors.white54),
+              ),
+              onSubmitted: (_) => _sendMessage(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: const Color(0xFF22C55E),
+            child: IconButton(
+              icon: const FaIcon(FontAwesomeIcons.paperPlane, size: 18),
+              onPressed: _sendMessage,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showHistory() async {
+    final history = await _dbHelper.getUserHistory(widget.username);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تاریخچه گفتگو'),
+        content: history.isEmpty
+            ? const Text('تاریخچه‌ای یافت نشد.')
+            : SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: ListView.builder(
+                  itemCount: history.length,
+                  itemBuilder: (ctx, i) {
+                    final item = history[i];
+                    return ListTile(
+                      title: Text(item['question'] ?? ''),
+                      subtitle: Text(item['answer'] ?? ''),
+                      trailing: Text(item['timestamp'] ?? ''),
+                    );
+                  },
+                ),
+              ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('بستن')),
+        ],
+      ),
+    );
+  }
+}
+
+class ChatMessage {
+  final String text;
+  final bool isUser;
+  ChatMessage({required this.text, required this.isUser});
+}

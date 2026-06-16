@@ -1,0 +1,53 @@
+name: SciFlow
+description: چت‌بات علوم تجربی
+version: 1.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.0          # برای ویندوز و دسکتاپ
+  path_provider: ^2.1.1
+  path: ^1.8.3
+  bcrypt: ^1.1.3
+  string_similarity: ^2.0.0
+  font_awesome_flutter: ^10.7.0
+  shared_preferences: ^2.2.0          # برای ذخیره تم
+  shamsi_date: ^1.0.1                 # تاریخ شمسی
+  units_converter: ^2.0.0             # تبدیل واحدها
+  math_expressions: ^2.4.0            # حل عبارات ریاضی
+  provider: ^6.0.0                # ← این را اضافه کنید
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: "^0.13.1"
+
+flutter_launcher_icons:
+  image_path: "assets/icon.png"
+
+  android:
+    generate: true
+    adaptive_icon_background: "#FFFFFF"        # رنگ پس‌زمینه
+    adaptive_icon_foreground: "assets/icon.png" # آیکون پیش‌زمینه
+
+  ios:
+    generate: true
+    remove_alpha_ios: true                     # حذف شفافیت (اختیاری)
+
+  windows:
+    generate: true
+
+  macos:
+    generate: true
+
+  linux:
+    generate: true                          # فعال‌سازی لینوکس
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/professor.png
