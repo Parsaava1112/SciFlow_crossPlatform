@@ -3,9 +3,9 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
-        // مسیر محلی پلاگین فلاتر
+        // مسیر محلی پلاگین‌های Flutter با استفاده از متغیر محیطی FLUTTER_ROOT
         maven {
-            url = uri("${providers.gradleProperty("flutter.sdk").get()}/packages/flutter_tools/gradle")
+            url = uri("${System.getenv("FLUTTER_ROOT")}/packages/flutter_tools/gradle")
         }
     }
 }
