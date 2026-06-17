@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.first"   // ← نام بسته‌ی خود را بگذارید
+    namespace = "com.SciFlow.app"   // ← نام بسته‌ی خود را بگذارید
     compileSdk = 34
 
     compileOptions {
@@ -18,7 +18,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.first"
+        applicationId = "com.SciFlow.app"
         minSdk = 21
         targetSdk = 34
         versionCode = flutter.versionCode
