@@ -1,17 +1,137 @@
-# first
+<div align="center">
+  <img src="assets/icon.png" alt="SciFlow Logo" width="120"/>
+  <h1>SciFlow</h1>
+  <p>چت‌بات هوشمند علوم تجربی – آفلاین، سریع، چندسکویی</p>
+</div>
 
-A new Flutter project.
+---
 
-## Getting Started
+## 📖 درباره پروژه
 
-This project is a starting point for a Flutter application.
+**SciFlow** یک دستیار هوشمند برای پرسش و پاسخ در زمینه‌ی علوم تجربی (فیزیک، شیمی، زیست‌شناسی، زمین‌شناسی و ...) است.  
+این برنامه در ابتدا با زبان پایتون و کتابخانه‌ی `difflib` ساخته شد و اکنون با **Flutter** بازنویسی شده تا به‌صورت کاملاً آفلاین و با رابط کاربری مدرن روی اندروید، ویندوز، لینوکس و macOS اجرا شود.
 
-A few resources to get you started if this is your first Flutter project:
+پایگاه داده‌ی برنامه شامل **هزاران پرسش و پاسخ علمی** است و از یک موتور جستجوی هوشمند (تشابه رشته‌ای) برای یافتن بهترین پاسخ استفاده می‌کند. همچنین قابلیت یادگیری پاسخ‌های جدید را نیز دارد.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+---
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## ✨ ویژگی‌های کلیدی
+
+- 🔍 **جستجوی هوشمند** – با استفاده از الگوریتم تطبیق رشته‌ها (شبیه `difflib`) و پشتیبانی از مترادف‌ها.
+- ❓ **تشخیص سوالات چندگانه** – مثلاً «چرا آسمان آبی است و باران چگونه تشکیل می‌شود؟»
+- 📅 **پاسخ‌های شرطی** – افزودن تاریخ شمسی هنگام سلام (با کتابخانه‌ی `shamsi_date`).
+- 🧮 **تبدیل واحد و محاسبات ریاضی** – تبدیل کیلومتر به مایل، درجه‌ی سانتی‌گراد به فارنهایت و حل عبارات ریاضی.
+- 🌓 **تم تاریک و روشن** – با ذخیره‌سازی انتخاب کاربر.
+- 🎨 **انیمیشن‌های زیبا و پس‌زمینه‌ی ذرات** – تجربه‌ی بصری جذاب.
+- 📜 **تاریخچه‌ی گفتگو** – مرور پرسش‌ها و پاسخ‌های قبلی.
+- 👍 **امتیازدهی به پاسخ‌ها** – کاربر می‌تواند پاسخ‌ها را لایک یا دیسلایک کند.
+- 📚 **یادگیری پاسخ‌های جدید** – وقتی پاسخی موجود نیست، کاربر می‌تواند پاسخ درست را وارد کند.
+- 🧪 **کارت عناصر شیمیایی** – نمایش اطلاعات عناصر جدول تناوبی (در صورت تشخیص).
+- 🔒 **احراز هویت** – ثبت‌نام و ورود کاربر با رمزنگاری bcrypt.
+- 🗂 **پایگاه داده SQLite** – ذخیره‌ی امن و سریع تمام داده‌ها.
+
+---
+
+## 📱 پلتفرم‌های پشتیبانی شده
+
+| پلتفرم | وضعیت |
+|--------|--------|
+| اندروید (APK) | ✅ |
+| ویندوز | ✅ |
+| وب | ✅ (با تغییرات جزئی) |
+| لینوکس | ✅ (با GitHub Actions قابل ساخت) |
+| macOS | ✅ (با GitHub Actions قابل ساخت) |
+
+---
+
+## 🚀 نصب و اجرا (برای توسعه‌دهندگان)
+
+### پیش‌نیازها
+
+- [Flutter SDK](https://flutter.dev) (نسخه‌ی ۳.۲۷ یا بالاتر)
+- Android Studio / Visual Studio (برای خروجی اندروید و ویندوز)
+- یک دستگاه اندروید یا شبیه‌ساز (برای تست)
+
+### راه‌اندازی
+
+۱. مخزن را کلون کنید:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/SciFlow_crossPlatform.git
+   cd SciFlow_crossPlatform
+۲. وابستگی‌ها را دریافت کنید:
+
+bash
+flutter pub get
+۳. برنامه را اجرا کنید:
+
+bash
+flutter run
+📦 ساخت خروجی‌های نهایی
+اندروید (APK)
+bash
+flutter build apk --release
+فایل خروجی در build/app/outputs/flutter-apk/app-release.apk قرار می‌گیرد.
+
+ویندوز
+bash
+flutter build windows
+فایل‌ها در build/windows/x64/runner/Release/ آماده می‌شوند.
+
+وب
+bash
+flutter build web
+خروجی در build/web ذخیره می‌شود.
+
+استفاده از GitHub Actions (بدون نیاز به سیستم محلی)
+این پروژه دارای یک فایل workflow آماده است که با هر push روی شاخه‌ی main، به‌طور خودکار APK اندروید را می‌سازد و می‌توانید آن را از بخش Artifacts دانلود کنید.
+همچنین می‌توانید برای سایر پلتفرم‌ها نیز workflow مشابه اضافه کنید (راهنما در مخزن موجود است).
+
+📁 ساختار پروژه
+text
+lib/
+├── main.dart                # نقطه‌ی شروع برنامه
+├── database_helper.dart     # مدیریت پایگاه داده SQLite
+├── login_screen.dart        # صفحه‌ی ورود/ثبت‌نام
+├── chat_screen.dart         # صفحه‌ی اصلی گفتگو
+├── help_screen.dart         # صفحه‌ی راهنما
+├── theme_provider.dart      # مدیریت تم
+├── particle_background.dart # پس‌زمینه‌ی ذرات
+├── element_card.dart        # کارت نمایش عنصر شیمیایی
+└── data.dart                # داده‌های اولیه (QA، عناصر، مترادف‌ها)
+🧩 وابستگی‌های اصلی
+sqflite / sqflite_common_ffi – پایگاه داده‌ی محلی
+
+string_similarity – جستجوی فازی
+
+font_awesome_flutter – آیکون‌های حرفه‌ای
+
+provider – مدیریت حالت
+
+shared_preferences – ذخیره‌ی تنظیمات
+
+shamsi_date – تاریخ شمسی
+
+math_expressions – حل عبارات ریاضی
+
+bcrypt – رمزنگاری گذرواژه
+
+برای فهرست کامل به pubspec.yaml مراجعه کنید.
+
+🎨 تغییر نام برنامه
+برای تغییر نام نمایشی برنامه به SciFlow (در اندروید):
+
+فایل android/app/src/main/AndroidManifest.xml را باز کرده و مقدار android:label را به SciFlow تغییر دهید.
+
+در pubspec.yaml نام پروژه (name) را به sciflow تغییر دهید.
+
+(اختیاری) در android/app/build.gradle.kts مقادیر applicationId و namespace را متناسب با نام جدید تنظیم کنید.
+
+📝 مجوز
+این پروژه تحت مجوز MIT منتشر شده است. شما آزاد هستید که از آن استفاده کنید، تغییر دهید و در پروژه‌های خود به کار ببرید.
+
+🤝 تقدیر و تشکر
+از تیم Flutter برای چارچوب فوق‌العاده‌شان
+
+از کتابخانه‌های متن‌باز استفاده‌شده در پروژه
+
+از جامعه‌ی بزرگ توسعه‌دهندگان ایرانی
