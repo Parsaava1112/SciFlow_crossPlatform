@@ -68,7 +68,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     _addMessage(ChatMessage(text: text, isUser: true));
     _messageController.clear();
-    HapticFeedback.lightImpact(); // بازخورد لمسی
+    HapticFeedback.lightImpact();
 
     setState(() {
       _isTyping = true;
@@ -108,9 +108,150 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() => _isTyping = false);
   }
 
-  // متدهای کمکی (_splitQuestions, _processSingleQuestion, ...) عیناً مثل قبل
-  // فقط در _buildMessageBubble تغییرات خواهیم داد
+  // ---------- متدهای کمکی ----------
+  List<String> _splitQuestions(String text) {
+    final separators = [' و ', '،', ' همچنین ', ' و همچنین '];
+    for (var sep in separators) {
+      if (text.contains(sep)) {
+        return text.split(sep).where((s) => s.trim().isNotEmpty).toList();
+      }
+    }
+    return [text];
+  }
 
+  Future<String?> _processSingleQuestion(String question) async {
+    if (_isGreeting(question)) {
+      final baseAnswer = await _dbHelper.smartSearch(question);
+      if (baseAnswer != null) {
+        final now = Jalali.now();
+        final dateStr = '${now.day} ${now.formatter.mN} ${now.year}';
+        return '$baseAnswer\nامروز $dateStr است.';
+      }
+      return null;
+    }
+
+    String? unitResult = _tryConvertUnit(question);
+    if (unitResult != null) return unitResult;
+
+    String? mathResult = _tryEvaluateMath(question);
+    if (mathResult != null) return mathResult;
+
+    final result = await _dbHelper.smartSearchWithScore(question);
+    if (result != null) {
+      String answer = result['answer'];
+      double score = result['score'];
+      String percentage = (score * 100).toStringAsFixed(1);
+      answer += '\n(میزان تطابق: $percentage٪)';
+      return answer;
+    }
+    return null;
+  }
+
+  bool _isGreeting(String text) {
+    final greetings = ['سلام', 'درود', 'سلام علیکم', 'خوبی', 'چطوری', 'سلامت'];
+    return greetings.any((g) => text.contains(g));
+  }
+
+  String? _tryConvertUnit(String input) {
+    final regex = RegExp(r'(\d+(?:\.\d+)?)\s*(\S+)\s+به\s+(\S+)');
+    final match = regex.firstMatch(input);
+    if (match == null) return null;
+
+    double value = double.tryParse(match.group(1)!) ?? 0;
+    String from = match.group(2)!.toLowerCase().replaceAll('?', '');
+    String to = match.group(3)!.toLowerCase().replaceAll('?', '');
+
+    const unitMap = {
+      'کیلومتر': 'km', 'متر': 'm', 'سانتی‌متر': 'cm', 'مایل': 'mile',
+      'کیلوگرم': 'kg', 'گرم': 'g', 'پوند': 'lb',
+      'سانتی‌گراد': 'celsius', 'فارنهایت': 'fahrenheit',
+      'درجه سانتی‌گراد': 'celsius', 'درجه فارنهایت': 'fahrenheit',
+    };
+
+    String? fromUnit = unitMap[from];
+    String? toUnit = unitMap[to];
+    if (fromUnit == null || toUnit == null) return null;
+
+    try {
+      double result = _convertUnitManually(value, fromUnit, toUnit);
+      if (result.isNaN) return null;
+      return '$value $from = ${result.toStringAsFixed(2)} $to';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  double _convertUnitManually(double value, String from, String to) {
+    if (from == 'celsius' && to == 'fahrenheit') return value * 9 / 5 + 32;
+    if (from == 'fahrenheit' && to == 'celsius') return (value - 32) * 5 / 9;
+
+    const toBase = {
+      'km': 1000.0, 'm': 1.0, 'cm': 0.01, 'mile': 1609.34,
+      'kg': 1.0, 'g': 0.001, 'lb': 0.453592,
+    };
+    const fromBase = {
+      'km': 1 / 1000.0, 'm': 1.0, 'cm': 100.0, 'mile': 1 / 1609.34,
+      'kg': 1.0, 'g': 1000.0, 'lb': 1 / 0.453592,
+    };
+
+    double inBase = value * (toBase[from] ?? 1.0);
+    return inBase * (fromBase[to] ?? 1.0);
+  }
+
+  String? _tryEvaluateMath(String input) {
+    final mathRegex = RegExp(r'^[\d+\-*/().\s]+$');
+    if (!mathRegex.hasMatch(input)) return null;
+    try {
+      final exp = Parser().parse(input);
+      final result = exp.evaluate(EvaluationType.REAL, ContextModel());
+      return '$input = $result';
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _showTeachDialog(String question) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('یادگیری'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('من جواب این سوال را نمی‌دانم:\n"$question"\nلطفاً پاسخ صحیح را وارد کنید:'),
+            const SizedBox(height: 12),
+            TextField(controller: controller,
+                decoration: const InputDecoration(hintText: 'پاسخ...', border: OutlineInputBorder())),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('انصراف')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('ذخیره')),
+        ],
+      ),
+    );
+  }
+
+  void _rateAnswer(ChatMessage msg, bool like) async {
+    String? lastQuestion;
+    for (int i = _messages.indexOf(msg) - 1; i >= 0; i--) {
+      if (_messages[i].isUser) {
+        lastQuestion = _messages[i].text;
+        break;
+      }
+    }
+    if (lastQuestion != null) {
+      await _dbHelper.rateAnswer(widget.username, lastQuestion, like);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(like ? '👍 متشکرم!' : '👎 ثبت شد.')),
+      );
+    }
+  }
+
+  // ---------- build ----------
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -118,7 +259,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       body: Stack(
         children: [
           ParticleBackground(
-            speedMultiplier: _isTyping ? 2.5 : 1.0, // ذرات در حین تایپ سریعتر
+            speedMultiplier: _isTyping ? 2.5 : 1.0,
           ),
           Column(
             children: [
@@ -155,7 +296,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // آواتار بات
             CircleAvatar(
               radius: 18,
               backgroundColor: Colors.indigo.shade400,
@@ -163,42 +303,36 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // حباب شیشه‌ای برای انیمیشن Lottie و وضعیت
-                  Container(
-                    constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.7),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade800.withOpacity(0.8),
-                      borderRadius: const BorderRadius.only(
-                        topRight: Radius.circular(16),
-                        topLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(16),
+              child: Container(
+                constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.7),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade800.withOpacity(0.8),
+                  borderRadius: const BorderRadius.only(
+                    topRight: Radius.circular(16),
+                    topLeft: Radius.circular(4),
+                    bottomRight: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Lottie.asset('assets/animations/thinking.json'),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        _currentStatus,
+                        style: const TextStyle(color: Colors.white70, fontSize: 14),
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Lottie.asset('assets/animations/thinking.json'),
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            _currentStatus,
-                            style: const TextStyle(color: Colors.white70, fontSize: 14),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -211,20 +345,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     return AppBar(
       title: Text('کاربر: ${widget.username}'),
       actions: [
-        // انتخاب تم رنگی
         PopupMenuButton<AppTheme>(
           icon: const Icon(Icons.palette_outlined),
           onSelected: (theme) {
             themeProvider.setAppTheme(theme);
           },
-          itemBuilder: (_) => [
-            const PopupMenuItem(value: AppTheme.defaultTheme, child: Text('پیش‌فرض')),
-            const PopupMenuItem(value: AppTheme.nature, child: Text('طبیعت')),
-            const PopupMenuItem(value: AppTheme.ocean, child: Text('اقیانوس')),
-            const PopupMenuItem(value: AppTheme.golden, child: Text('طلایی')),
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: AppTheme.defaultTheme, child: Text('پیش‌فرض')),
+            PopupMenuItem(value: AppTheme.nature, child: Text('طبیعت')),
+            PopupMenuItem(value: AppTheme.ocean, child: Text('اقیانوس')),
+            PopupMenuItem(value: AppTheme.golden, child: Text('طلایی')),
           ],
         ),
-        // تغییر حالت تاریک/روشن
         IconButton(
           icon: Icon(themeProvider.themeMode == ThemeMode.dark
               ? Icons.light_mode
@@ -278,12 +410,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: const Duration(milliseconds: 600),
-      curve: Curves.elasticOut, // انیمیشن فنری
+      curve: Curves.elasticOut,
       builder: (context, value, child) {
         return Opacity(
           opacity: value,
           child: Transform.scale(
-            scale: 0.8 + (0.2 * value), // کمی بزرگ شدن
+            scale: 0.8 + (0.2 * value),
             child: child,
           ),
         );
@@ -324,7 +456,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            // لایک / دیسلایک (قبلی)
                             InkWell(
                               onTap: () => _rateAnswer(msg, true),
                               child: const Icon(Icons.thumb_up_alt_outlined,
@@ -337,7 +468,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                   size: 18, color: Colors.redAccent),
                             ),
                             const SizedBox(width: 12),
-                            // دکمه کپی
                             InkWell(
                               onTap: () {
                                 Clipboard.setData(ClipboardData(text: msg.text));
@@ -369,8 +499,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       ),
     );
   }
-
-  // _rateAnswer مثل قبل
 
   Widget _buildInputArea() {
     return Container(

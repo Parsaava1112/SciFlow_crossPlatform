@@ -19,29 +19,39 @@ class ThemeProvider extends ChangeNotifier {
 
   // ---------- تم‌های روشن ----------
   ThemeData get lightTheme {
+    final base = ThemeData.light();
     final colorScheme = ColorScheme.fromSeed(
       seedColor: _seedColor,
       brightness: Brightness.light,
     );
-    return ThemeData.light().copyWith(
-      colorScheme: colorScheme,
-      fontFamily: 'Vazirmatn', // ← اگه فونت رو اضافه کردی؛ در غیر اینصورت خط رو حذف کن
+    return _applyFont(
+      base.copyWith(colorScheme: colorScheme),
     );
   }
 
   // ---------- تم‌های تاریک ----------
   ThemeData get darkTheme {
+    final base = ThemeData.dark();
     final colorScheme = ColorScheme.fromSeed(
       seedColor: _seedColor,
       brightness: Brightness.dark,
     );
-    return ThemeData.dark().copyWith(
-      colorScheme: colorScheme,
-      fontFamily: 'Vazirmatn',
+    return _applyFont(
+      base.copyWith(colorScheme: colorScheme),
     );
   }
 
-  // ---------- رنگ پایه بر اساس تم انتخاب‌شده ----------
+  // ---------- اعمال فونت (در صورت وجود) ----------
+  ThemeData _applyFont(ThemeData theme) {
+    // اگر فونت وزیرمتن را اضافه کرده‌ای، کامنت‌ها را بردار
+    // return theme.copyWith(
+    //   textTheme: theme.textTheme.apply(fontFamily: 'Vazirmatn'),
+    //   primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'Vazirmatn'),
+    // );
+    return theme; // بدون فونت
+  }
+
+  // ---------- رنگ پایه ----------
   Color get _seedColor {
     switch (_appTheme) {
       case AppTheme.nature:
@@ -81,7 +91,6 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // بارگذاری حالت روشن/تاریک
     final modeString = prefs.getString(_themeModeKey) ?? 'light';
     switch (modeString) {
       case 'light':
@@ -97,7 +106,6 @@ class ThemeProvider extends ChangeNotifier {
         _themeMode = ThemeMode.light;
     }
 
-    // بارگذاری تم رنگی
     final appThemeString = prefs.getString(_appThemeKey) ?? AppTheme.defaultTheme.name;
     _appTheme = AppTheme.values.firstWhere(
       (e) => e.name == appThemeString,

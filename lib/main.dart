@@ -5,10 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:provider/provider.dart';
 import 'login_screen.dart';
 import 'theme_provider.dart';
-
-// تعریف سراسری برای استفاده در تنظیمات
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-    FlutterLocalNotificationsPlugin();
+import 'notifications.dart'; // فایلی که ساختیم
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,17 +16,22 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  // راه‌اندازی نوتیفیکیشن (اندروید)
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const initSettings = InitializationSettings(android: androidInit);
-  await flutterLocalNotificationsPlugin.initialize(initSettings);
+  // راه‌اندازی نوتیفیکیشن (فقط موبایل)
+  if (Platform.isAndroid || Platform.isIOS) {
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosInit = DarwinInitializationSettings(); // برای iOS
+    const initSettings = InitializationSettings(
+      android: androidInit,
+      iOS: iosInit,
+    );
+    await flutterLocalNotificationsPlugin.initialize(initSettings);
 
-  // درخواست اجازه برای اندروید ۱۳+
-  if (Platform.isAndroid) {
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    if (Platform.isAndroid) {
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+    }
   }
 
   runApp(
@@ -49,9 +51,9 @@ class ScienceChatbotApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'چت‌بات علوم تجربی',
-      theme: themeProvider.lightTheme,        // تم روشن دینامیک
-      darkTheme: themeProvider.darkTheme,      // تم تاریک دینامیک
-      themeMode: themeProvider.themeMode,      // حالت (روشن/تاریک/سیستم)
+      theme: themeProvider.lightTheme,
+      darkTheme: themeProvider.darkTheme,
+      themeMode: themeProvider.themeMode,
       home: const LoginScreen(),
     );
   }

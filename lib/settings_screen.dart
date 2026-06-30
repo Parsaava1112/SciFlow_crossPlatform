@@ -3,9 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'theme_provider.dart';
-
-// این متغیر در main.dart تعریف شده
-extern FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
+import 'notifications.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -33,21 +31,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleReminder(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     if (value) {
-      // زمان‌بندی هفتگی (مثلاً جمعه ساعت ۱۰ صبح)
-      await flutterLocalNotificationsPlugin.periodicallyShow(
-        0,
-        'یادآور گفتگو',
-        'سلام! وقت یک گپ دوستانه است. بیا سر بزن!',
-        RepeatInterval.weekly,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'weekly_channel',
-            'یادآور هفتگی',
-            importance: Importance.high,
-            priority: Priority.high,
+      try {
+        await flutterLocalNotificationsPlugin.periodicallyShow(
+          0,
+          'یادآور گفتگو',
+          'سلام! وقت یک گپ دوستانه است. بیا سر بزن!',
+          RepeatInterval.weekly,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'weekly_channel',
+              'یادآور هفتگی',
+              importance: Importance.high,
+              priority: Priority.high,
+            ),
           ),
-        ),
-      );
+        );
+      } catch (e) {
+        // در ویندوز ممکن است خطا دهد؛ نادیده بگیر
+      }
     } else {
       await flutterLocalNotificationsPlugin.cancel(0);
     }
@@ -62,10 +63,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         children: [
           const SizedBox(height: 16),
-          // تم رنگی
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text('تم برنامه', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            child: Text('تم برنامه',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
           Consumer<ThemeProvider>(
             builder: (_, themeProvider, __) {
@@ -87,7 +88,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
           const Divider(),
-          // یادآور هفتگی
           SwitchListTile(
             title: const Text('یادآور هفتگی (جمعه‌ها)'),
             subtitle: const Text('هر هفته یک نوتیفیکیشن برای گپ زدن دریافت کن'),
