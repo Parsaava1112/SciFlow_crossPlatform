@@ -15,11 +15,16 @@ dependencies:
   bcrypt: ^1.1.3
   string_similarity: ^2.0.0
   font_awesome_flutter: ^10.7.0
-  shared_preferences: ^2.2.0          # برای ذخیره تم
+  shared_preferences: ^2.2.0          # ذخیره تم و تنظیمات
   shamsi_date: ^1.0.1                 # تاریخ شمسی
   units_converter: ^2.0.0             # تبدیل واحدها
   math_expressions: ^2.4.0            # حل عبارات ریاضی
-  provider: ^6.0.0                # ← این را اضافه کنید
+  provider: ^6.0.0                    # مدیریت حالت
+
+  # ---------- بسته‌های جدید ----------
+  lottie: ^2.7.0                      # انیمیشن‌های Lottie
+  shimmer: ^3.0.0                     # افکت بارگذاری
+  flutter_local_notifications: ^17.0.0  # نوتیفیکیشن (یادآور هفتگی)
 
 dev_dependencies:
   flutter_test:
@@ -28,26 +33,22 @@ dev_dependencies:
 
 flutter_launcher_icons:
   image_path: "assets/icon.png"
-
   android:
     generate: true
-    adaptive_icon_background: "#FFFFFF"        # رنگ پس‌زمینه
-    adaptive_icon_foreground: "assets/icon.png" # آیکون پیش‌زمینه
-
+    adaptive_icon_background: "#FFFFFF"
+    adaptive_icon_foreground: "assets/icon.png"
   ios:
     generate: true
-    remove_alpha_ios: true                     # حذف شفافیت (اختیاری)
-
+    remove_alpha_ios: true
   windows:
     generate: true
-
   macos:
     generate: true
-
   linux:
-    generate: true                          # فعال‌سازی لینوکس
+    generate: true
 
 flutter:
   uses-material-design: true
   assets:
     - assets/professor.png
+    - assets/animations/thinking.json   # ← فایل انیمیشن Lottie

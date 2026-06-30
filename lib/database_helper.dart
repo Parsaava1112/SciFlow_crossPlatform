@@ -23,12 +23,14 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,                     // نسخه جدید
       onCreate: _createTables,
+      onUpgrade: _upgradeTables,
     );
   }
 
   Future<void> _createTables(Database db, int version) async {
+    // کاربران
     await db.execute('''
       CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
@@ -36,6 +38,7 @@ class DatabaseHelper {
       )
     ''');
 
+    // پرسش و پاسخ
     await db.execute('''
       CREATE TABLE IF NOT EXISTS qa (
         question TEXT PRIMARY KEY,
@@ -44,16 +47,20 @@ class DatabaseHelper {
       )
     ''');
 
+    // تاریخچه چت (ستون‌های جدید از همان اول ساخته می‌شوند)
     await db.execute('''
       CREATE TABLE IF NOT EXISTS chat_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT,
         question TEXT,
         answer TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        is_pinned INTEGER DEFAULT 0,
+        is_archived INTEGER DEFAULT 0
       )
     ''');
 
+    // مترادف‌ها
     await db.execute('''
       CREATE TABLE IF NOT EXISTS synonyms (
         word TEXT PRIMARY KEY,
@@ -61,8 +68,26 @@ class DatabaseHelper {
       )
     ''');
 
+    // امتیازها (برای این که توی rateAnswer هماهنگ باشه)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ratings (
+        username TEXT,
+        question TEXT,
+        rating INTEGER,
+        PRIMARY KEY(username, question)
+      )
+    ''');
+
     // درج داده‌های اولیه
     await _insertInitialData(db);
+  }
+
+  Future<void> _upgradeTables(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // افزودن ستون‌های is_pinned و is_archived به تاریخچه
+      await db.execute('ALTER TABLE chat_history ADD COLUMN is_pinned INTEGER DEFAULT 0');
+      await db.execute('ALTER TABLE chat_history ADD COLUMN is_archived INTEGER DEFAULT 0');
+    }
   }
 
   Future<void> _insertInitialData(Database db) async {
@@ -92,54 +117,7 @@ class DatabaseHelper {
     }
   }
 
-  // در database_helper.dart، پس از smartSearch قبلی، این متدها را اضافه کنید:
-
-  /// جستجوی هوشمند با برگرداندن درصد تطابق
-  Future<Map<String, dynamic>?> smartSearchWithScore(String userQuestion) async {
-    final db = await database;
-    // جستجوی دقیق
-    List<Map> exactMatch = await db.query('qa',
-        where: 'LOWER(question) = LOWER(?)', whereArgs: [userQuestion]);
-    if (exactMatch.isNotEmpty) {
-      await _incrementUsage(db, exactMatch.first['question'] as String);
-      return {'answer': exactMatch.first['answer'], 'score': 1.0};
-    }
-    // مترادف
-    List<Map> syn = await db.query('synonyms',
-        where: 'LOWER(word) = LOWER(?)', whereArgs: [userQuestion]);
-    if (syn.isNotEmpty) {
-      return await smartSearchWithScore(syn.first['main_word'] as String);
-    }
-    // جستجوی فازی
-    final allQa = await db.query('qa');
-    if (allQa.isEmpty) return null;
-    final questions = allQa.map((e) => (e['question'] as String).toLowerCase()).toList();
-    final bestMatch = userQuestion.toLowerCase().bestMatch(questions);
-    if (bestMatch.bestMatch.rating != null && bestMatch.bestMatch.rating! >= 0.5) {
-      final matchedQ = bestMatch.bestMatch.target!;
-      final answer = allQa
-          .firstWhere((e) => (e['question'] as String).toLowerCase() == matchedQ)['answer'] as String;
-      await _incrementUsage(db, matchedQ);
-      return {'answer': answer, 'score': bestMatch.bestMatch.rating};
-    }
-    return null;
-  }
-
-  /// ثبت امتیاز کاربر به یک پاسخ
-  Future<void> rateAnswer(String username, String question, bool like) async {
-    final db = await database;
-    await db.execute('''CREATE TABLE IF NOT EXISTS ratings (
-        username TEXT, question TEXT, rating INTEGER, 
-        PRIMARY KEY(username, question)
-    )''');
-    await db.insert('ratings', {
-      'username': username,
-      'question': question,
-      'rating': like ? 1 : -1,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  // ثبت‌نام کاربر
+  // ================== اصالت کاربر ==================
   Future<Map<String, dynamic>> registerUser(String username, String password) async {
     if (password.length < 8) {
       return {'success': false, 'message': 'رمز عبور باید حداقل ۸ کاراکتر باشد'};
@@ -159,7 +137,6 @@ class DatabaseHelper {
     }
   }
 
-  // احراز هویت
   Future<bool> authenticateUser(String username, String password) async {
     final db = await database;
     final results = await db.query(
@@ -175,7 +152,7 @@ class DatabaseHelper {
     return false;
   }
 
-  // جستجوی هوشمند
+  // ================== جستجوی هوشمند ==================
   Future<String?> smartSearch(String userQuestion) async {
     final db = await database;
 
@@ -207,7 +184,6 @@ class DatabaseHelper {
     final questions = allQa.map((e) => (e['question'] as String).toLowerCase()).toList();
     final bestMatch = userQuestion.toLowerCase().bestMatch(questions);
 
-    // اصلاح: اضافه کردن بررسی null و جایگزینی با مقدار پیش‌فرض
     if ((bestMatch.bestMatch.rating ?? 0) >= 0.6) {
       final matchedQuestion = bestMatch.bestMatch.target ?? '';
       final answer = allQa.firstWhere(
@@ -220,14 +196,141 @@ class DatabaseHelper {
     return null;
   }
 
-  Future<void> _incrementUsage(Database db, String question) async {
-    await db.rawUpdate(
-      'UPDATE qa SET usage_count = usage_count + 1 WHERE question = ?',
-      [question],
+  /// جستجوی هوشمند با درصد تطابق (برای نمایش در چت)
+  Future<Map<String, dynamic>?> smartSearchWithScore(String userQuestion) async {
+    final db = await database;
+
+    // جستجوی دقیق
+    List<Map> exactMatch = await db.query(
+      'qa',
+      where: 'LOWER(question) = LOWER(?)',
+      whereArgs: [userQuestion],
+    );
+    if (exactMatch.isNotEmpty) {
+      await _incrementUsage(db, exactMatch.first['question'] as String);
+      return {
+        'answer': exactMatch.first['answer'],
+        'score': 1.0,
+      };
+    }
+
+    // مترادف
+    List<Map> syn = await db.query(
+      'synonyms',
+      where: 'LOWER(word) = LOWER(?)',
+      whereArgs: [userQuestion],
+    );
+    if (syn.isNotEmpty) {
+      return await smartSearchWithScore(syn.first['main_word'] as String);
+    }
+
+    // جستجوی فازی
+    final allQa = await db.query('qa');
+    if (allQa.isEmpty) return null;
+
+    final questions = allQa.map((e) => (e['question'] as String).toLowerCase()).toList();
+    final bestMatch = userQuestion.toLowerCase().bestMatch(questions);
+
+    if (bestMatch.bestMatch.rating != null && bestMatch.bestMatch.rating! >= 0.5) {
+      final matchedQ = bestMatch.bestMatch.target!;
+      final answer = allQa
+          .firstWhere((e) => (e['question'] as String).toLowerCase() == matchedQ)['answer'] as String;
+      await _incrementUsage(db, matchedQ);
+      return {
+        'answer': answer,
+        'score': bestMatch.bestMatch.rating,
+      };
+    }
+    return null;
+  }
+
+  // ================== تاریخچه چت ==================
+  Future<void> addChatHistory(String username, String question, String answer) async {
+    final db = await database;
+    await db.insert('chat_history', {
+      'username': username,
+      'question': question,
+      'answer': answer,
+      'is_pinned': 0,
+      'is_archived': 0,
+    });
+  }
+
+  /// دریافت تاریخچه عادی (پیام‌هایی که بایگانی نشده‌اند)
+  Future<List<Map<String, dynamic>>> getUserHistory(String username) async {
+    final db = await database;
+    return await db.query(
+      'chat_history',
+      where: 'username = ? AND is_archived = 0',
+      whereArgs: [username],
+      orderBy: 'timestamp DESC',
+      limit: 50,
     );
   }
 
-  // افزودن QA جدید
+  /// دریافت تاریخچه بایگانی‌شده
+  Future<List<Map<String, dynamic>>> getArchivedHistory(String username) async {
+    final db = await database;
+    return await db.query(
+      'chat_history',
+      where: 'username = ? AND is_archived = 1',
+      whereArgs: [username],
+      orderBy: 'timestamp DESC',
+    );
+  }
+
+  /// جستجو در تاریخچه (در سوال و جواب)
+  Future<List<Map<String, dynamic>>> searchHistory(String username, String query) async {
+    final db = await database;
+    return await db.rawQuery(
+      'SELECT * FROM chat_history WHERE username = ? AND (question LIKE ? OR answer LIKE ?) AND is_archived = 0 ORDER BY timestamp DESC',
+      [username, '%$query%', '%$query%'],
+    );
+  }
+
+  /// پین / حذف پین
+  Future<void> pinMessage(int id, bool pin) async {
+    final db = await database;
+    await db.update(
+      'chat_history',
+      {'is_pinned': pin ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// بایگانی / خروج از بایگانی
+  Future<void> archiveMessage(int id, bool archive) async {
+    final db = await database;
+    await db.update(
+      'chat_history',
+      {'is_archived': archive ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// حذف کامل یک پیام
+  Future<void> deleteMessage(int id) async {
+    final db = await database;
+    await db.delete(
+      'chat_history',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // ================== امتیازدهی ==================
+  Future<void> rateAnswer(String username, String question, bool like) async {
+    final db = await database;
+    await db.insert('ratings', {
+      'username': username,
+      'question': question,
+      'rating': like ? 1 : -1,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  // ================== سایر ==================
   Future<void> addQA(String question, String answer) async {
     final db = await database;
     await db.insert(
@@ -241,29 +344,13 @@ class DatabaseHelper {
     );
   }
 
-  // ذخیره تاریخچه
-  Future<void> addChatHistory(String username, String question, String answer) async {
-    final db = await database;
-    await db.insert('chat_history', {
-      'username': username,
-      'question': question,
-      'answer': answer,
-    });
-  }
-
-  // دریافت تاریخچه کاربر
-  Future<List<Map<String, dynamic>>> getUserHistory(String username) async {
-    final db = await database;
-    return await db.query(
-      'chat_history',
-      where: 'username = ?',
-      whereArgs: [username],
-      orderBy: 'timestamp DESC',
-      limit: 50,
+  Future<void> _incrementUsage(Database db, String question) async {
+    await db.rawUpdate(
+      'UPDATE qa SET usage_count = usage_count + 1 WHERE question = ?',
+      [question],
     );
   }
 
-  // سوالات پرتکرار
   Future<List<String>> getPopularQuestions(int limit) async {
     final db = await database;
     final results = await db.query(

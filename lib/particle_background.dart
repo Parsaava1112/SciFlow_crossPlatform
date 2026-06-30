@@ -2,13 +2,15 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 class ParticleBackground extends StatefulWidget {
-  const ParticleBackground({Key? key}) : super(key: key);
+  final double speedMultiplier; // ۱.۰ عادی، ۲.۰ تند
+  const ParticleBackground({Key? key, this.speedMultiplier = 1.0}) : super(key: key);
 
   @override
   State<ParticleBackground> createState() => _ParticleBackgroundState();
 }
 
-class _ParticleBackgroundState extends State<ParticleBackground> with TickerProviderStateMixin {
+class _ParticleBackgroundState extends State<ParticleBackground>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   final List<Particle> _particles = [];
   final Random _random = Random();
@@ -16,21 +18,26 @@ class _ParticleBackgroundState extends State<ParticleBackground> with TickerProv
   @override
   void initState() {
     super.initState();
+    for (int i = 0; i < 50; i++) {
+      _particles.add(Particle(_random));
+    }
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
-    )..repeat();
+    )..addListener(() {
+        setState(() {
+          for (var p in _particles) {
+            p.move(widget.speedMultiplier);
+          }
+        });
+      });
+    _controller.repeat();
+  }
 
-    // ایجاد ۵۰ ذره تصادفی
-    for (int i = 0; i < 50; i++) {
-      _particles.add(Particle(
-        x: _random.nextDouble() * 400,
-        y: _random.nextDouble() * 800,
-        radius: _random.nextDouble() * 2 + 1,
-        speedX: (_random.nextDouble() - 0.5) * 0.5,
-        speedY: (_random.nextDouble() - 0.5) * 0.5,
-      ));
-    }
+  @override
+  void didUpdateWidget(covariant ParticleBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // فقط برای تغییر سرعت لازم نیست کاری کنیم چون در move از widget جدید می‌خونه
   }
 
   @override
@@ -41,30 +48,35 @@ class _ParticleBackgroundState extends State<ParticleBackground> with TickerProv
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        for (var p in _particles) {
-          p.update();
-        }
-        return CustomPaint(
-          painter: ParticlePainter(_particles),
-          size: MediaQuery.of(context).size,
-        );
-      },
+    return CustomPaint(
+      painter: ParticlePainter(_particles),
+      size: Size.infinite,
     );
   }
 }
 
 class Particle {
-  double x, y, radius, speedX, speedY;
-  Particle({required this.x, required this.y, required this.radius, required this.speedX, required this.speedY});
+  double x, y, dx, dy, size;
+  Color color;
 
-  void update() {
-    x += speedX;
-    y += speedY;
-    if (x < 0 || x > 400) speedX *= -1;
-    if (y < 0 || y > 800) speedY *= -1;
+  Particle(Random rand)
+      : x = rand.nextDouble() * 400,
+        y = rand.nextDouble() * 800,
+        dx = (rand.nextDouble() - 0.5) * 0.5,
+        dy = (rand.nextDouble() - 0.5) * 0.5,
+        size = rand.nextDouble() * 3 + 1,
+        color = Color.fromARGB(
+          rand.nextInt(100) + 55,
+          rand.nextInt(255),
+          rand.nextInt(255),
+          rand.nextInt(255),
+        );
+
+  void move(double speedMult) {
+    x += dx * speedMult;
+    y += dy * speedMult;
+    if (x < 0 || x > 400) dx *= -1;
+    if (y < 0 || y > 800) dy *= -1;
   }
 }
 
@@ -74,9 +86,10 @@ class ParticlePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white.withOpacity(0.3);
+    final paint = Paint();
     for (var p in particles) {
-      canvas.drawCircle(Offset(p.x, p.y), p.radius, paint);
+      paint.color = p.color;
+      canvas.drawCircle(Offset(p.x, p.y), p.size, paint);
     }
   }
 

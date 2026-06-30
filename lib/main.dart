@@ -1,15 +1,37 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:provider/provider.dart';
 import 'login_screen.dart';
 import 'theme_provider.dart';
 
-void main() {
+// تعریف سراسری برای استفاده در تنظیمات
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // فعال‌سازی sqflite برای دسکتاپ
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+
+  // راه‌اندازی نوتیفیکیشن (اندروید)
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const initSettings = InitializationSettings(android: androidInit);
+  await flutterLocalNotificationsPlugin.initialize(initSettings);
+
+  // درخواست اجازه برای اندروید ۱۳+
+  if (Platform.isAndroid) {
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
+  }
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeProvider(),
@@ -27,15 +49,9 @@ class ScienceChatbotApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'چت‌بات علوم تجربی',
-      theme: ThemeData.light().copyWith(
-        scaffoldBackgroundColor: Colors.white,
-        appBarTheme: const AppBarTheme(backgroundColor: Colors.blue),
-      ),
-      darkTheme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
-        appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF1F2937)),
-      ),
-      themeMode: themeProvider.themeMode,
+      theme: themeProvider.lightTheme,        // تم روشن دینامیک
+      darkTheme: themeProvider.darkTheme,      // تم تاریک دینامیک
+      themeMode: themeProvider.themeMode,      // حالت (روشن/تاریک/سیستم)
       home: const LoginScreen(),
     );
   }
