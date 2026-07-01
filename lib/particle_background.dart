@@ -1,43 +1,52 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'theme_provider.dart';
 
 class ParticleBackground extends StatefulWidget {
-  final double speedMultiplier; // ۱.۰ عادی، ۲.۰ تند
-  const ParticleBackground({Key? key, this.speedMultiplier = 1.0}) : super(key: key);
+  final double speedMultiplier;
+  final AppTheme theme;
+  const ParticleBackground({
+    Key? key,
+    this.speedMultiplier = 1.0,
+    this.theme = AppTheme.defaultTheme,
+  }) : super(key: key);
 
   @override
-  State<ParticleBackground> createState() => _ParticleBackgroundState();
+  _ParticleBackgroundState createState() => _ParticleBackgroundState();
 }
 
 class _ParticleBackgroundState extends State<ParticleBackground>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _controller;
-  final List<Particle> _particles = [];
+  late List<_Particle> _particles;
   final Random _random = Random();
 
   @override
   void initState() {
     super.initState();
-    for (int i = 0; i < 50; i++) {
-      _particles.add(Particle(_random));
-    }
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
-    )..addListener(() {
-        setState(() {
-          for (var p in _particles) {
-            p.move(widget.speedMultiplier);
-          }
-        });
+    )..repeat();
+
+    _particles = List.generate(40, (index) => _Particle(_random, widget.theme));
+    _controller.addListener(() {
+      setState(() {
+        for (var p in _particles) {
+          p.update(widget.speedMultiplier);
+        }
       });
-    _controller.repeat();
+    });
   }
 
   @override
-  void didUpdateWidget(covariant ParticleBackground oldWidget) {
+  void didUpdateWidget(ParticleBackground oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // فقط برای تغییر سرعت لازم نیست کاری کنیم چون در move از widget جدید می‌خونه
+    if (oldWidget.theme != widget.theme) {
+      for (var p in _particles) {
+        p.changeTheme(widget.theme, _random);
+      }
+    }
   }
 
   @override
@@ -49,48 +58,141 @@ class _ParticleBackgroundState extends State<ParticleBackground>
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: ParticlePainter(_particles),
       size: Size.infinite,
+      painter: _ParticlePainter(_particles, widget.theme),
     );
   }
 }
 
-class Particle {
-  double x, y, dx, dy, size;
+class _Particle {
+  double x, y;
+  double speed;
+  double size;
+  double opacity;
   Color color;
+  int shape; // 0: circle, 1: flower, 2: bubble, 3: sparkle
+  double rotation;
+  double rotationSpeed;
 
-  Particle(Random rand)
-      : x = rand.nextDouble() * 400,
-        y = rand.nextDouble() * 800,
-        dx = (rand.nextDouble() - 0.5) * 0.5,
-        dy = (rand.nextDouble() - 0.5) * 0.5,
-        size = rand.nextDouble() * 3 + 1,
-        color = Color.fromARGB(
-          rand.nextInt(100) + 55,
-          rand.nextInt(255),
-          rand.nextInt(255),
-          rand.nextInt(255),
-        );
+  _Particle(Random random, AppTheme theme) {
+    _init(random, theme);
+    x = random.nextDouble() * 400; // مقیاس
+    y = random.nextDouble() * 800;
+  }
 
-  void move(double speedMult) {
-    x += dx * speedMult;
-    y += dy * speedMult;
-    if (x < 0 || x > 400) dx *= -1;
-    if (y < 0 || y > 800) dy *= -1;
+  void _init(Random random, AppTheme theme) {
+    // تنظیمات بر اساس تم
+    switch (theme) {
+      case AppTheme.nature:
+        color = Color.lerp(
+            Colors.green.shade300, Colors.lightGreen.shade200, random.nextDouble())!;
+        shape = random.nextBool() ? 1 : 0; // گل یا برگ
+        break;
+      case AppTheme.ocean:
+        color = Color.lerp(
+            Colors.lightBlue.shade200, Colors.cyan.shade100, random.nextDouble())!;
+        shape = 2; // حباب
+        break;
+      case AppTheme.golden:
+        color = Color.lerp(
+            Colors.amber.shade300, Colors.yellow.shade100, random.nextDouble())!;
+        shape = 3; // ذره درخشان
+        break;
+      default:
+        color = Colors.white.withOpacity(0.2);
+        shape = 0; // دایره ساده
+    }
+    speed = (0.3 + random.nextDouble() * 0.7);
+    size = 4.0 + random.nextDouble() * 8;
+    opacity = 0.1 + random.nextDouble() * 0.4;
+    rotation = random.nextDouble() * 2 * pi;
+    rotationSpeed = (random.nextDouble() - 0.5) * 0.02;
+  }
+
+  void changeTheme(AppTheme theme, Random random) {
+    _init(random, theme);
+  }
+
+  void update(double multiplier) {
+    y -= speed * multiplier * 0.8;
+    rotation += rotationSpeed * multiplier;
+    if (y < -20) {
+      y = 820;
+      x = Random().nextDouble() * 400;
+    }
   }
 }
 
-class ParticlePainter extends CustomPainter {
-  final List<Particle> particles;
-  ParticlePainter(this.particles);
+class _ParticlePainter extends CustomPainter {
+  final List<_Particle> particles;
+  final AppTheme theme;
+
+  _ParticlePainter(this.particles, this.theme);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint();
     for (var p in particles) {
-      paint.color = p.color;
-      canvas.drawCircle(Offset(p.x, p.y), p.size, paint);
+      final paint = Paint()
+        ..color = p.color.withOpacity(p.opacity)
+        ..style = PaintingStyle.fill;
+
+      canvas.save();
+      canvas.translate(p.x, p.y);
+      canvas.rotate(p.rotation);
+
+      switch (p.shape) {
+        case 0: // دایره
+          canvas.drawCircle(Offset.zero, p.size / 2, paint);
+          break;
+        case 1: // گل ساده (۶ پر)
+          _drawFlower(canvas, p.size, paint);
+          break;
+        case 2: // حباب (دایره با برق)
+          canvas.drawCircle(Offset.zero, p.size * 0.6, paint);
+          final shinePaint = Paint()
+            ..color = Colors.white.withOpacity(p.opacity * 0.5)
+            ..style = PaintingStyle.fill;
+          canvas.drawCircle(
+              Offset(-p.size * 0.15, -p.size * 0.15), p.size * 0.15, shinePaint);
+          break;
+        case 3: // ذره طلایی (ستاره کوچک)
+          _drawSparkle(canvas, p.size, paint);
+          break;
+      }
+      canvas.restore();
     }
+  }
+
+  void _drawFlower(Canvas canvas, double size, Paint paint) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      double angle = i * (pi / 3);
+      double dx = cos(angle) * size * 0.4;
+      double dy = sin(angle) * size * 0.4;
+      path.addOval(Rect.fromCircle(center: Offset(dx, dy), radius: size * 0.25));
+    }
+    canvas.drawPath(path, paint);
+    // مرکز
+    canvas.drawCircle(Offset.zero, size * 0.18, Paint()..color = Colors.yellow);
+  }
+
+  void _drawSparkle(Canvas canvas, double size, Paint paint) {
+    final path = Path();
+    double r1 = size * 0.5;
+    double r2 = size * 0.15;
+    for (int i = 0; i < 5; i++) {
+      double angle = i * (2 * pi / 5) - pi / 2;
+      double x1 = cos(angle) * r1;
+      double y1 = sin(angle) * r1;
+      double x2 = cos(angle + pi / 5) * r2;
+      double y2 = sin(angle + pi / 5) * r2;
+      if (i == 0) path.moveTo(x1, y1);
+      path.lineTo(x2, y2);
+      path.lineTo(x1, y1);
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+    canvas.drawPath(path, paint..maskFilter = MaskFilter.blur(BlurStyle.normal, 2));
   }
 
   @override

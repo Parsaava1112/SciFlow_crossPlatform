@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -7,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:math_expressions/math_expressions.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import 'package:shimmer/shimmer.dart';
+
 import 'database_helper.dart';
 import 'theme_provider.dart';
 import 'particle_background.dart';
@@ -29,6 +32,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final List<ChatMessage> _messages = [];
   bool _isTyping = false;
   DateTime? _thinkingStart;
+  bool _showScrollButton = false;
   final List<String> _statusMessages = [
     'در حال جستجو...',
     'در حال فکر کردن...',
@@ -38,6 +42,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   ];
   late String _currentStatus;
 
+  // انیمیشن پرش آواتار
+  late AnimationController _bounceController;
+  late Animation<double> _bounceAnimation;
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +53,45 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _addMessage(ChatMessage(
         text: 'سلام ${widget.username}! چطور می‌تونم کمکت کنم؟',
         isUser: false));
+
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _bounceAnimation = Tween<double>(begin: 0, end: 6).animate(
+      CurvedAnimation(parent: _bounceController, curve: Curves.easeInOut),
+    );
+
+    _scrollController.addListener(() {
+      if (_scrollController.hasClients) {
+        final maxScroll = _scrollController.position.maxScrollExtent;
+        final offset = _scrollController.offset;
+        if (maxScroll - offset > 100 && !_showScrollButton) {
+          setState(() => _showScrollButton = true);
+        } else if (maxScroll - offset <= 100 && _showScrollButton) {
+          setState(() => _showScrollButton = false);
+        }
+      }
+    });
+
+    // مدیریت تمام‌صفحه برای اندروید ۱۵+
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.transparent,
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _bounceController.dispose();
+    _scrollController.dispose();
+    _messageController.dispose();
+    super.dispose();
   }
 
   void _addMessage(ChatMessage message) {
@@ -62,6 +109,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
+  String _timeAgo(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inDays > 0) return '${diff.inDays} روز پیش';
+    if (diff.inHours > 0) return '${diff.inHours} ساعت پیش';
+    if (diff.inMinutes > 0) return '${diff.inMinutes} دقیقه پیش';
+    return 'همین الان';
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
@@ -74,6 +129,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _isTyping = true;
       _thinkingStart = DateTime.now();
       _currentStatus = _statusMessages[Random().nextInt(_statusMessages.length)];
+      // شروع انیمیشن پرش
+      _bounceController.repeat(reverse: true);
     });
 
     final questions = _splitQuestions(text);
@@ -84,7 +141,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
 
     Duration thinkingDuration = DateTime.now().difference(_thinkingStart!);
-    String timingInfo = '\n⏱️ مدت زمان: ${thinkingDuration.inMilliseconds / 1000} ثانیه';
+    String timingInfo = '\n⏱️ مدت زمان: ${(thinkingDuration.inMilliseconds / 1000).toStringAsFixed(2)} ثانیه';
 
     if (answers.isEmpty) {
       final newAnswer = await _showTeachDialog(text);
@@ -105,10 +162,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
     }
 
-    setState(() => _isTyping = false);
+    setState(() {
+      _isTyping = false;
+      _bounceController.stop();
+      _bounceController.reset();
+    });
   }
 
-  // ---------- متدهای کمکی ----------
+  // ---------- متدهای کمکی (بدون تغییر) ----------
   List<String> _splitQuestions(String text) {
     final separators = [' و ', '،', ' همچنین ', ' و همچنین '];
     for (var sep in separators) {
@@ -251,35 +312,113 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _showEmojiReaction(ChatMessage msg) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor.withOpacity(0.9),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('واکنش خود را انتخاب کنید',
+                style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: ['👍', '❤️', '😂', '😮', '😢', '🔥', '👎', '✨']
+                    .map((emoji) => GestureDetector(
+                          onTap: () {
+                            setState(() => msg.reaction = emoji);
+                            Navigator.pop(ctx);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(emoji, style: const TextStyle(fontSize: 32)),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ---------- build ----------
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
       body: Stack(
         children: [
+          // پس‌زمینه ذرات هوشمند
           ParticleBackground(
+            theme: themeProvider.currentAppTheme,
             speedMultiplier: _isTyping ? 2.5 : 1.0,
           ),
+          // محتوای اصلی
           Column(
             children: [
               _buildAppBar(themeProvider),
               Expanded(
                 child: _messages.isEmpty
-                    ? const Center(child: Text('پیامی نداریم!'))
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        itemCount: _messages.length + (_isTyping ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == _messages.length && _isTyping) {
-                            return _buildLoadingIndicator();
-                          }
-                          return _buildMessageBubble(_messages[index]);
-                        },
+                    ? _buildWelcomeScreen(themeProvider, isDark)
+                    : Stack(
+                        children: [
+                          ListView.builder(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            itemCount: _messages.length + (_isTyping ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              if (index == _messages.length && _isTyping) {
+                                return _buildLoadingIndicator(isDark);
+                              }
+                              return _buildMessageBubble(
+                                  _messages[index], isDark, themeProvider);
+                            },
+                          ),
+                          if (_showScrollButton)
+                            Positioned(
+                              bottom: 16,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: AnimatedScale(
+                                  scale: _showScrollButton ? 1.0 : 0.0,
+                                  duration: const Duration(milliseconds: 200),
+                                  child: FloatingActionButton(
+                                    mini: true,
+                                    backgroundColor: Colors.indigoAccent,
+                                    onPressed: () {
+                                      _scrollController.animateTo(
+                                        _scrollController.position.maxScrollExtent,
+                                        duration: const Duration(milliseconds: 500),
+                                        curve: Curves.easeOutBack,
+                                      );
+                                    },
+                                    child: const Icon(
+                                        Icons.keyboard_double_arrow_down_rounded,
+                                        color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
               ),
-              _buildInputArea(),
+              _buildInputArea(bottomPadding),
             ],
           ),
         ],
@@ -287,7 +426,84 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildLoadingIndicator() {
+  Widget _buildWelcomeScreen(ThemeProvider themeProvider, bool isDark) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Lottie.asset(
+              'assets/animations/welcome.json',
+              height: 200,
+              errorBuilder: (context, error, stackTrace) =>
+                  Icon(Icons.chat_bubble_outline, size: 120, color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: (isDark ? Colors.white : Colors.black).withOpacity(0.1),
+                    border: Border.all(
+                        color: Colors.white.withOpacity(0.2), width: 1.5),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'سلام ${widget.username}! 👋',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'چطور می‌تونم کمکت کنم؟',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          'یه جوک بگو',
+                          'آب و هوا',
+                          'تبدیل واحد',
+                          'محاسبه ریاضی',
+                          'امروز چه روزیه؟'
+                        ].map((item) {
+                          return ActionChip(
+                            avatar: const Icon(Icons.touch_app, size: 16),
+                            label: Text(item),
+                            backgroundColor: Colors.white.withOpacity(0.2),
+                            onPressed: () {
+                              _messageController.text = item;
+                              _sendMessage();
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator(bool isDark) {
     return Shimmer.fromColors(
       baseColor: Colors.grey[700]!,
       highlightColor: Colors.grey[500]!,
@@ -296,10 +512,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.indigo.shade400,
-              child: const FaIcon(FontAwesomeIcons.robot, color: Colors.white, size: 20),
+            // آواتار پرشی
+            AnimatedBuilder(
+              animation: _bounceAnimation,
+              builder: (context, child) => Transform.translate(
+                offset: Offset(0, -_bounceAnimation.value),
+                child: child,
+              ),
+              child: CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.indigo.shade400,
+                child: const FaIcon(FontAwesomeIcons.robot,
+                    color: Colors.white, size: 20),
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -319,11 +544,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Lottie.asset('assets/animations/thinking.json'),
-                    ),
+                    _buildLottieOrFallback(),
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
@@ -339,6 +560,35 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         ),
       ),
     );
+  }
+
+  Widget _buildLottieOrFallback() {
+    try {
+      return Lottie.asset(
+        'assets/animations/thinking.json',
+        width: 40,
+        height: 40,
+        errorBuilder: (context, error, stackTrace) {
+          return const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white54),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      return const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white54),
+        ),
+      );
+    }
   }
 
   AppBar _buildAppBar(ThemeProvider themeProvider) {
@@ -391,7 +641,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage msg) {
+  Widget _buildMessageBubble(ChatMessage msg, bool isDark, ThemeProvider themeProvider) {
     final isUser = msg.isUser;
     final borderRadius = isUser
         ? const BorderRadius.only(
@@ -407,104 +657,193 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             bottomRight: Radius.circular(16),
           );
 
+    // استایل بر اساس تم و حالت روشن/تاریک
+    BoxDecoration decoration;
+    if (isDark) {
+      // گلس‌مورفیسم
+      decoration = BoxDecoration(
+        color: (isUser ? Colors.green : Colors.indigo).withOpacity(0.15),
+        borderRadius: borderRadius,
+        border: Border.all(
+            color: Colors.white.withOpacity(0.15), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4)),
+        ],
+      );
+    } else {
+      // نئومورفیسم در تم روشن
+      decoration = BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: borderRadius,
+        boxShadow: [
+          BoxShadow(
+              color: Colors.grey.shade400,
+              offset: const Offset(4, 4),
+              blurRadius: 8,
+              spreadRadius: 1),
+          const BoxShadow(
+              color: Colors.white,
+              offset: Offset(-4, -4),
+              blurRadius: 8,
+              spreadRadius: 1),
+        ],
+      );
+    }
+
+    Widget bubbleContent = Container(
+      constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: decoration,
+      child: Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                msg.text,
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 16,
+                ),
+                textDirection: TextDirection.rtl,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _timeAgo(msg.timestamp),
+                style: TextStyle(
+                  color: (isDark ? Colors.white : Colors.black45).withOpacity(0.6),
+                  fontSize: 11,
+                ),
+              ),
+              if (!isUser)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      InkWell(
+                        onTap: () => _rateAnswer(msg, true),
+                        child: Icon(Icons.thumb_up_alt_outlined,
+                            size: 18,
+                            color: isDark ? Colors.greenAccent : Colors.green),
+                      ),
+                      const SizedBox(width: 12),
+                      InkWell(
+                        onTap: () => _rateAnswer(msg, false),
+                        child: Icon(Icons.thumb_down_alt_outlined,
+                            size: 18,
+                            color: isDark ? Colors.redAccent : Colors.red),
+                      ),
+                      const SizedBox(width: 12),
+                      InkWell(
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: msg.text));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('پاسخ کپی شد')),
+                          );
+                        },
+                        child: Icon(Icons.copy,
+                            size: 18,
+                            color: isDark ? Colors.white54 : Colors.black45),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          // نمایش واکنش ایموجی
+          if (msg.reaction != null)
+            Positioned(
+              left: -2,
+              bottom: -2,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withOpacity(0.2), blurRadius: 4)
+                  ],
+                ),
+                child: Text(msg.reaction!, style: const TextStyle(fontSize: 16)),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    // اگر تم تاریک است، افکت بلور پشت حباب
+    if (isDark) {
+      bubbleContent = ClipRRect(
+        borderRadius: borderRadius,
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: bubbleContent,
+        ),
+      );
+    }
+
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: const Duration(milliseconds: 600),
       curve: Curves.elasticOut,
       builder: (context, value, child) {
+        final safeOpacity = value.clamp(0.0, 1.0);
         return Opacity(
-          opacity: value,
-          child: Transform.scale(
-            scale: 0.8 + (0.2 * value),
-            child: child,
-          ),
+          opacity: safeOpacity,
+          child: Transform.scale(scale: 0.8 + (0.2 * safeOpacity), child: child),
         );
       },
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (!isUser)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.indigo.shade400,
-                  child: const FaIcon(FontAwesomeIcons.robot, color: Colors.white, size: 20),
-                ),
-              ),
-            Flexible(
-              child: Container(
-                constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.75),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isUser ? Colors.green.shade700 : Colors.grey.shade800,
-                  borderRadius: borderRadius,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(msg.text,
-                        style: const TextStyle(color: Colors.white, fontSize: 16),
-                        textDirection: TextDirection.rtl),
-                    if (!isUser)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            InkWell(
-                              onTap: () => _rateAnswer(msg, true),
-                              child: const Icon(Icons.thumb_up_alt_outlined,
-                                  size: 18, color: Colors.greenAccent),
-                            ),
-                            const SizedBox(width: 12),
-                            InkWell(
-                              onTap: () => _rateAnswer(msg, false),
-                              child: const Icon(Icons.thumb_down_alt_outlined,
-                                  size: 18, color: Colors.redAccent),
-                            ),
-                            const SizedBox(width: 12),
-                            InkWell(
-                              onTap: () {
-                                Clipboard.setData(ClipboardData(text: msg.text));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('پاسخ کپی شد')),
-                                );
-                              },
-                              child: const Icon(Icons.copy,
-                                  size: 18, color: Colors.white54),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+      child: GestureDetector(
+        onLongPress: () => _showEmojiReaction(msg),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Align(
+            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!isUser)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.indigo.shade400,
+                      child: const FaIcon(FontAwesomeIcons.robot,
+                          color: Colors.white, size: 20),
+                    ),
+                  ),
+                Flexible(child: bubbleContent),
+                if (isUser)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.green,
+                      child: const FaIcon(FontAwesomeIcons.user,
+                          size: 20, color: Colors.white),
+                    ),
+                  ),
+              ],
             ),
-            if (isUser)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: CircleAvatar(
-                  radius: 18,
-                  backgroundColor: Colors.green,
-                  child: const FaIcon(FontAwesomeIcons.user, size: 20, color: Colors.white),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildInputArea() {
+  Widget _buildInputArea(double bottomPadding) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: EdgeInsets.fromLTRB(12, 8, 12, 8 + bottomPadding),
       decoration: BoxDecoration(
-        color: Theme.of(context).bottomAppBarTheme.color ?? const Color(0xFF1F2937),
+        color: Theme.of(context).bottomAppBarTheme.color ??
+            const Color(0xFF1F2937),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.2),
@@ -528,7 +867,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                prefixIcon: const FaIcon(FontAwesomeIcons.pen, size: 16, color: Colors.white54),
+                prefixIcon: const FaIcon(FontAwesomeIcons.pen,
+                    size: 16, color: Colors.white54),
               ),
               onSubmitted: (_) => _sendMessage(),
             ),
@@ -549,13 +889,22 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _showHistory() async {
-    Navigator.push(context, MaterialPageRoute(
-        builder: (_) => HistoryScreen(username: widget.username)));
+    Navigator.push(context,
+        MaterialPageRoute(builder: (_) => HistoryScreen(username: widget.username)));
   }
 }
 
+// مدل پیام با واکنش و زمان
 class ChatMessage {
   final String text;
   final bool isUser;
-  ChatMessage({required this.text, required this.isUser});
+  final DateTime timestamp;
+  String? reaction;
+
+  ChatMessage({
+    required this.text,
+    required this.isUser,
+    DateTime? timestamp,
+    this.reaction,
+  }) : timestamp = timestamp ?? DateTime.now();
 }
