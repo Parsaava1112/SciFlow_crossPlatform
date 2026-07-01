@@ -42,7 +42,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   ];
   late String _currentStatus;
 
-  // انیمیشن پرش آواتار
   late AnimationController _bounceController;
   late Animation<double> _bounceAnimation;
 
@@ -74,7 +73,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
     });
 
-    // مدیریت تمام‌صفحه برای اندروید ۱۵+
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -128,8 +126,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     setState(() {
       _isTyping = true;
       _thinkingStart = DateTime.now();
-      _currentStatus = _statusMessages[Random().nextInt(_statusMessages.length)];
-      // شروع انیمیشن پرش
+      _currentStatus =
+          _statusMessages[Random().nextInt(_statusMessages.length)];
       _bounceController.repeat(reverse: true);
     });
 
@@ -141,7 +139,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
 
     Duration thinkingDuration = DateTime.now().difference(_thinkingStart!);
-    String timingInfo = '\n⏱️ مدت زمان: ${(thinkingDuration.inMilliseconds / 1000).toStringAsFixed(2)} ثانیه';
+    String timingInfo =
+        '\n⏱️ مدت زمان: ${(thinkingDuration.inMilliseconds / 1000).toStringAsFixed(2)} ثانیه';
 
     if (answers.isEmpty) {
       final newAnswer = await _showTeachDialog(text);
@@ -169,7 +168,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     });
   }
 
-  // ---------- متدهای کمکی (بدون تغییر) ----------
   List<String> _splitQuestions(String text) {
     final separators = [' و ', '،', ' همچنین ', ' و همچنین '];
     for (var sep in separators) {
@@ -209,7 +207,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   bool _isGreeting(String text) {
-    final greetings = ['سلام', 'درود', 'سلام علیکم', 'خوبی', 'چطوری', 'سلامت'];
+    final greetings = [
+      'سلام',
+      'درود',
+      'سلام علیکم',
+      'خوبی',
+      'چطوری',
+      'سلامت'
+    ];
     return greetings.any((g) => text.contains(g));
   }
 
@@ -223,10 +228,17 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     String to = match.group(3)!.toLowerCase().replaceAll('?', '');
 
     const unitMap = {
-      'کیلومتر': 'km', 'متر': 'm', 'سانتی‌متر': 'cm', 'مایل': 'mile',
-      'کیلوگرم': 'kg', 'گرم': 'g', 'پوند': 'lb',
-      'سانتی‌گراد': 'celsius', 'فارنهایت': 'fahrenheit',
-      'درجه سانتی‌گراد': 'celsius', 'درجه فارنهایت': 'fahrenheit',
+      'کیلومتر': 'km',
+      'متر': 'm',
+      'سانتی‌متر': 'cm',
+      'مایل': 'mile',
+      'کیلوگرم': 'kg',
+      'گرم': 'g',
+      'پوند': 'lb',
+      'سانتی‌گراد': 'celsius',
+      'فارنهایت': 'fahrenheit',
+      'درجه سانتی‌گراد': 'celsius',
+      'درجه فارنهایت': 'fahrenheit',
     };
 
     String? fromUnit = unitMap[from];
@@ -247,12 +259,22 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (from == 'fahrenheit' && to == 'celsius') return (value - 32) * 5 / 9;
 
     const toBase = {
-      'km': 1000.0, 'm': 1.0, 'cm': 0.01, 'mile': 1609.34,
-      'kg': 1.0, 'g': 0.001, 'lb': 0.453592,
+      'km': 1000.0,
+      'm': 1.0,
+      'cm': 0.01,
+      'mile': 1609.34,
+      'kg': 1.0,
+      'g': 0.001,
+      'lb': 0.453592,
     };
     const fromBase = {
-      'km': 1 / 1000.0, 'm': 1.0, 'cm': 100.0, 'mile': 1 / 1609.34,
-      'kg': 1.0, 'g': 1000.0, 'lb': 1 / 0.453592,
+      'km': 1 / 1000.0,
+      'm': 1.0,
+      'cm': 100.0,
+      'mile': 1 / 1609.34,
+      'kg': 1.0,
+      'g': 1000.0,
+      'lb': 1 / 0.453592,
     };
 
     double inBase = value * (toBase[from] ?? 1.0);
@@ -280,14 +302,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('من جواب این سوال را نمی‌دانم:\n"$question"\nلطفاً پاسخ صحیح را وارد کنید:'),
+            Text(
+                'من جواب این سوال را نمی‌دانم:\n"$question"\nلطفاً پاسخ صحیح را وارد کنید:'),
             const SizedBox(height: 12),
-            TextField(controller: controller,
-                decoration: const InputDecoration(hintText: 'پاسخ...', border: OutlineInputBorder())),
+            TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                    hintText: 'پاسخ...', border: OutlineInputBorder())),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('انصراف')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('انصراف')),
           TextButton(
               onPressed: () => Navigator.pop(ctx, controller.text.trim()),
               child: const Text('ذخیره')),
@@ -306,6 +332,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
     if (lastQuestion != null) {
       await _dbHelper.rateAnswer(widget.username, lastQuestion, like);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(like ? '👍 متشکرم!' : '👎 ثبت شد.')),
       );
@@ -340,7 +367,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                           },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(emoji, style: const TextStyle(fontSize: 32)),
+                            child: Text(emoji,
+                                style: const TextStyle(fontSize: 32)),
                           ),
                         ))
                     .toList(),
@@ -352,7 +380,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  // ---------- build ----------
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -362,12 +389,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     return Scaffold(
       body: Stack(
         children: [
-          // پس‌زمینه ذرات هوشمند
           ParticleBackground(
-            theme: themeProvider.currentAppTheme,
+            theme: themeProvider.appTheme, // اصلاح‌شده: appTheme به‌جای currentAppTheme
             speedMultiplier: _isTyping ? 2.5 : 1.0,
           ),
-          // محتوای اصلی
           Column(
             children: [
               _buildAppBar(themeProvider),
@@ -380,7 +405,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                             controller: _scrollController,
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
-                            itemCount: _messages.length + (_isTyping ? 1 : 0),
+                            itemCount:
+                                _messages.length + (_isTyping ? 1 : 0),
                             itemBuilder: (context, index) {
                               if (index == _messages.length && _isTyping) {
                                 return _buildLoadingIndicator(isDark);
@@ -403,8 +429,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                                     backgroundColor: Colors.indigoAccent,
                                     onPressed: () {
                                       _scrollController.animateTo(
-                                        _scrollController.position.maxScrollExtent,
-                                        duration: const Duration(milliseconds: 500),
+                                        _scrollController
+                                            .position.maxScrollExtent,
+                                        duration:
+                                            const Duration(milliseconds: 500),
                                         curve: Curves.easeOutBack,
                                       );
                                     },
@@ -436,8 +464,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             Lottie.asset(
               'assets/animations/welcome.json',
               height: 200,
-              errorBuilder: (context, error, stackTrace) =>
-                  Icon(Icons.chat_bubble_outline, size: 120, color: Colors.grey),
+              errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.chat_bubble_outline,
+                  size: 120,
+                  color: Colors.grey),
             ),
             const SizedBox(height: 24),
             ClipRRect(
@@ -447,7 +477,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 child: Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: (isDark ? Colors.white : Colors.black).withOpacity(0.1),
+                    color:
+                        (isDark ? Colors.white : Colors.black).withOpacity(0.1),
                     border: Border.all(
                         color: Colors.white.withOpacity(0.2), width: 1.5),
                     borderRadius: BorderRadius.circular(24),
@@ -512,7 +543,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // آواتار پرشی
             AnimatedBuilder(
               animation: _bounceAnimation,
               builder: (context, child) => Transform.translate(
@@ -549,7 +579,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                     Flexible(
                       child: Text(
                         _currentStatus,
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 14),
                       ),
                     ),
                   ],
@@ -601,7 +632,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             themeProvider.setAppTheme(theme);
           },
           itemBuilder: (_) => const [
-            PopupMenuItem(value: AppTheme.defaultTheme, child: Text('پیش‌فرض')),
+            PopupMenuItem(
+                value: AppTheme.defaultTheme, child: Text('پیش‌فرض')),
             PopupMenuItem(value: AppTheme.nature, child: Text('طبیعت')),
             PopupMenuItem(value: AppTheme.ocean, child: Text('اقیانوس')),
             PopupMenuItem(value: AppTheme.golden, child: Text('طلایی')),
@@ -641,7 +673,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildMessageBubble(ChatMessage msg, bool isDark, ThemeProvider themeProvider) {
+  Widget _buildMessageBubble(
+      ChatMessage msg, bool isDark, ThemeProvider themeProvider) {
     final isUser = msg.isUser;
     final borderRadius = isUser
         ? const BorderRadius.only(
@@ -657,15 +690,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             bottomRight: Radius.circular(16),
           );
 
-    // استایل بر اساس تم و حالت روشن/تاریک
     BoxDecoration decoration;
     if (isDark) {
-      // گلس‌مورفیسم
       decoration = BoxDecoration(
         color: (isUser ? Colors.green : Colors.indigo).withOpacity(0.15),
         borderRadius: borderRadius,
-        border: Border.all(
-            color: Colors.white.withOpacity(0.15), width: 1.5),
+        border:
+            Border.all(color: Colors.white.withOpacity(0.15), width: 1.5),
         boxShadow: [
           BoxShadow(
               color: Colors.black.withOpacity(0.3),
@@ -674,7 +705,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         ],
       );
     } else {
-      // نئومورفیسم در تم روشن
       decoration = BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         borderRadius: borderRadius,
@@ -715,7 +745,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               Text(
                 _timeAgo(msg.timestamp),
                 style: TextStyle(
-                  color: (isDark ? Colors.white : Colors.black45).withOpacity(0.6),
+                  color:
+                      (isDark ? Colors.white : Colors.black45).withOpacity(0.6),
                   fontSize: 11,
                 ),
               ),
@@ -729,33 +760,38 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         onTap: () => _rateAnswer(msg, true),
                         child: Icon(Icons.thumb_up_alt_outlined,
                             size: 18,
-                            color: isDark ? Colors.greenAccent : Colors.green),
+                            color: isDark
+                                ? Colors.greenAccent
+                                : Colors.green),
                       ),
                       const SizedBox(width: 12),
                       InkWell(
                         onTap: () => _rateAnswer(msg, false),
                         child: Icon(Icons.thumb_down_alt_outlined,
                             size: 18,
-                            color: isDark ? Colors.redAccent : Colors.red),
+                            color:
+                                isDark ? Colors.redAccent : Colors.red),
                       ),
                       const SizedBox(width: 12),
                       InkWell(
                         onTap: () {
-                          Clipboard.setData(ClipboardData(text: msg.text));
+                          Clipboard.setData(
+                              ClipboardData(text: msg.text));
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('پاسخ کپی شد')),
                           );
                         },
                         child: Icon(Icons.copy,
                             size: 18,
-                            color: isDark ? Colors.white54 : Colors.black45),
+                            color: isDark
+                                ? Colors.white54
+                                : Colors.black45),
                       ),
                     ],
                   ),
                 ),
             ],
           ),
-          // نمایش واکنش ایموجی
           if (msg.reaction != null)
             Positioned(
               left: -2,
@@ -770,14 +806,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                         color: Colors.black.withOpacity(0.2), blurRadius: 4)
                   ],
                 ),
-                child: Text(msg.reaction!, style: const TextStyle(fontSize: 16)),
+                child: Text(msg.reaction!,
+                    style: const TextStyle(fontSize: 16)),
               ),
             ),
         ],
       ),
     );
 
-    // اگر تم تاریک است، افکت بلور پشت حباب
     if (isDark) {
       bubbleContent = ClipRRect(
         borderRadius: borderRadius,
@@ -796,7 +832,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         final safeOpacity = value.clamp(0.0, 1.0);
         return Opacity(
           opacity: safeOpacity,
-          child: Transform.scale(scale: 0.8 + (0.2 * safeOpacity), child: child),
+          child: Transform.scale(
+              scale: 0.8 + (0.2 * safeOpacity), child: child),
         );
       },
       child: GestureDetector(
@@ -804,7 +841,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         child: Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Align(
-            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+            alignment:
+                isUser ? Alignment.centerRight : Alignment.centerLeft,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -866,7 +904,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16),
                 prefixIcon: const FaIcon(FontAwesomeIcons.pen,
                     size: 16, color: Colors.white54),
               ),
@@ -889,12 +928,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _showHistory() async {
-    Navigator.push(context,
-        MaterialPageRoute(builder: (_) => HistoryScreen(username: widget.username)));
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => HistoryScreen(username: widget.username)));
   }
 }
 
-// مدل پیام با واکنش و زمان
 class ChatMessage {
   final String text;
   final bool isUser;

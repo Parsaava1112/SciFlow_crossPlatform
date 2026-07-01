@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 pluginManagement {
     repositories {
         google()
@@ -23,3 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "first"
 include(":app")
+=======
+include(":app")
+>>>>>>> 56d96f388ae5ade75ad80dc67b7a7d4913b38790

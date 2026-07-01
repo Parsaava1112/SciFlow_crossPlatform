@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'theme_provider.dart';
 
@@ -29,7 +30,8 @@ class _ParticleBackgroundState extends State<ParticleBackground>
       duration: const Duration(seconds: 10),
     )..repeat();
 
-    _particles = List.generate(40, (index) => _Particle(_random, widget.theme));
+    _particles =
+        List.generate(40, (index) => _Particle(_random, widget.theme));
     _controller.addListener(() {
       setState(() {
         for (var p in _particles) {
@@ -65,42 +67,41 @@ class _ParticleBackgroundState extends State<ParticleBackground>
 }
 
 class _Particle {
-  double x, y;
-  double speed;
-  double size;
-  double opacity;
-  Color color;
-  int shape; // 0: circle, 1: flower, 2: bubble, 3: sparkle
-  double rotation;
-  double rotationSpeed;
+  late double x, y;
+  late double speed;
+  late double size;
+  late double opacity;
+  late Color color;
+  late int shape; // 0: circle, 1: flower, 2: bubble, 3: sparkle
+  late double rotation;
+  late double rotationSpeed;
 
   _Particle(Random random, AppTheme theme) {
     _init(random, theme);
-    x = random.nextDouble() * 400; // مقیاس
+    x = random.nextDouble() * 400;
     y = random.nextDouble() * 800;
   }
 
   void _init(Random random, AppTheme theme) {
-    // تنظیمات بر اساس تم
     switch (theme) {
       case AppTheme.nature:
         color = Color.lerp(
             Colors.green.shade300, Colors.lightGreen.shade200, random.nextDouble())!;
-        shape = random.nextBool() ? 1 : 0; // گل یا برگ
+        shape = random.nextBool() ? 1 : 0;
         break;
       case AppTheme.ocean:
         color = Color.lerp(
             Colors.lightBlue.shade200, Colors.cyan.shade100, random.nextDouble())!;
-        shape = 2; // حباب
+        shape = 2;
         break;
       case AppTheme.golden:
         color = Color.lerp(
             Colors.amber.shade300, Colors.yellow.shade100, random.nextDouble())!;
-        shape = 3; // ذره درخشان
+        shape = 3;
         break;
       default:
         color = Colors.white.withOpacity(0.2);
-        shape = 0; // دایره ساده
+        shape = 0;
     }
     speed = (0.3 + random.nextDouble() * 0.7);
     size = 4.0 + random.nextDouble() * 8;
@@ -141,13 +142,13 @@ class _ParticlePainter extends CustomPainter {
       canvas.rotate(p.rotation);
 
       switch (p.shape) {
-        case 0: // دایره
+        case 0:
           canvas.drawCircle(Offset.zero, p.size / 2, paint);
           break;
-        case 1: // گل ساده (۶ پر)
+        case 1:
           _drawFlower(canvas, p.size, paint);
           break;
-        case 2: // حباب (دایره با برق)
+        case 2:
           canvas.drawCircle(Offset.zero, p.size * 0.6, paint);
           final shinePaint = Paint()
             ..color = Colors.white.withOpacity(p.opacity * 0.5)
@@ -155,7 +156,7 @@ class _ParticlePainter extends CustomPainter {
           canvas.drawCircle(
               Offset(-p.size * 0.15, -p.size * 0.15), p.size * 0.15, shinePaint);
           break;
-        case 3: // ذره طلایی (ستاره کوچک)
+        case 3:
           _drawSparkle(canvas, p.size, paint);
           break;
       }
@@ -169,11 +170,12 @@ class _ParticlePainter extends CustomPainter {
       double angle = i * (pi / 3);
       double dx = cos(angle) * size * 0.4;
       double dy = sin(angle) * size * 0.4;
-      path.addOval(Rect.fromCircle(center: Offset(dx, dy), radius: size * 0.25));
+      path.addOval(
+          Rect.fromCircle(center: Offset(dx, dy), radius: size * 0.25));
     }
     canvas.drawPath(path, paint);
-    // مرکز
-    canvas.drawCircle(Offset.zero, size * 0.18, Paint()..color = Colors.yellow);
+    canvas.drawCircle(
+        Offset.zero, size * 0.18, Paint()..color = Colors.yellow);
   }
 
   void _drawSparkle(Canvas canvas, double size, Paint paint) {
@@ -192,7 +194,8 @@ class _ParticlePainter extends CustomPainter {
     }
     path.close();
     canvas.drawPath(path, paint);
-    canvas.drawPath(path, paint..maskFilter = MaskFilter.blur(BlurStyle.normal, 2));
+    canvas.drawPath(
+        path, paint..maskFilter = MaskFilter.blur(BlurStyle.normal, 2));
   }
 
   @override

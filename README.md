@@ -58,7 +58,11 @@
    ```bash
    git clone https://github.com/YOUR_USERNAME/SciFlow_crossPlatform.git
    cd SciFlow_crossPlatform
+<<<<<<< HEAD
 ۲. وابستگی‌ها را دریافت کنید:
+=======
+ را دریافت کنید:
+>>>>>>> 56d96f388ae5ade75ad80dc67b7a7d4913b38790
 
 bash
 flutter pub get
@@ -134,4 +138,8 @@ bcrypt – رمزنگاری گذرواژه
 
 از کتابخانه‌های متن‌باز استفاده‌شده در پروژه
 
+<<<<<<< HEAD
 از جامعه‌ی بزرگ توسعه‌دهندگان ایرانی
+=======
+از جامعه‌ی بزرگ توسعه‌دهندگان ایرانی
+>>>>>>> 56d96f388ae5ade75ad80dc67b7a7d4913b38790
