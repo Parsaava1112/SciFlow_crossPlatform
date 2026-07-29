@@ -19,7 +19,8 @@ dependencies:
   shamsi_date: ^1.0.1                 # تاریخ شمسی
   units_converter: ^2.0.0             # تبدیل واحدها
   math_expressions: ^2.4.0            # حل عبارات ریاضی
-  provider: ^6.0.0                    # مدیریت حالت
+  provider: ^6.0.0    
+  http: ^1.1.0                # مدیریت حالت
 
   # ---------- بسته‌های جدید ----------
   lottie: ^2.7.0                      # انیمیشن‌های Lottie

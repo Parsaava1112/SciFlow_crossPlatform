@@ -16,6 +16,7 @@ import 'particle_background.dart';
 import 'help_screen.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
+import 'services/api_service.dart'; // 👈 فایل جدید API
 
 class ChatScreen extends StatefulWidget {
   final String username;
@@ -33,6 +34,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isTyping = false;
   DateTime? _thinkingStart;
   bool _showScrollButton = false;
+  bool _isBackendOnline = true; // 👈 وضعیت اتصال به بک‌اند
+
   final List<String> _statusMessages = [
     'در حال جستجو...',
     'در حال فکر کردن...',
@@ -131,6 +134,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _bounceController.repeat(reverse: true);
     });
 
+    // 👇 اگر آفلاین است، پیام مناسب نشان بده
+    if (!_isBackendOnline && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('حالت آفلاین - پاسخ‌ها از حافظه محلی خوانده می‌شوند.')),
+      );
+    }
+
     final questions = _splitQuestions(text);
     List<String> answers = [];
     for (var q in questions) {
@@ -143,6 +153,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         '\n⏱️ مدت زمان: ${(thinkingDuration.inMilliseconds / 1000).toStringAsFixed(2)} ثانیه';
 
     if (answers.isEmpty) {
+      // هیچ جوابی (نه از بک‌اند، نه محلی) پیدا نشد
       final newAnswer = await _showTeachDialog(text);
       if (newAnswer != null && newAnswer.isNotEmpty) {
         await _dbHelper.addQA(text, newAnswer);
@@ -178,7 +189,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     return [text];
   }
 
+  // 👇 متد اصلی پردازش یک سوال (تغییر کرده)
   Future<String?> _processSingleQuestion(String question) async {
+    // 1. احوالپرسی (بدون نیاز به سرور)
     if (_isGreeting(question)) {
       final baseAnswer = await _dbHelper.smartSearch(question);
       if (baseAnswer != null) {
@@ -189,21 +202,40 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       return null;
     }
 
+    // 2. تبدیل واحد و ریاضی
     String? unitResult = _tryConvertUnit(question);
     if (unitResult != null) return unitResult;
 
     String? mathResult = _tryEvaluateMath(question);
     if (mathResult != null) return mathResult;
 
-    final result = await _dbHelper.smartSearchWithScore(question);
-    if (result != null) {
-      String answer = result['answer'];
-      double score = result['score'];
-      String percentage = (score * 100).toStringAsFixed(1);
-      answer += '\n(میزان تطابق: $percentage٪)';
+    // 3. تلاش برای دریافت پاسخ از بک‌اند هوشمند
+    if (_isBackendOnline) {
+      var backendResponse = await ApiService.askQuestion(question);
+      if (backendResponse != null) {
+        // پاسخ از سرور آمد
+        return backendResponse['answer'];
+      } else {
+        // خطا در اتصال -> آفلاین می‌شویم
+        setState(() => _isBackendOnline = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ارتباط با سرور قطع شد. از این پس پاسخ‌ها از حافظه محلی نمایش داده می‌شوند.')),
+          );
+        }
+      }
+    }
+
+    // 4. fallback به جستجوی محلی (در صورت آفلاین بودن)
+    final localResult = await _dbHelper.smartSearchWithScore(question);
+    if (localResult != null) {
+      String answer = localResult['answer'];
+      double score = localResult['score'];
+      answer += '\n(میزان تطابق محلی: ${(score * 100).toStringAsFixed(1)}٪)';
       return answer;
     }
-    return null;
+
+    return null; // هیچ پاسخی یافت نشد
   }
 
   bool _isGreeting(String text) {
@@ -390,7 +422,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       body: Stack(
         children: [
           ParticleBackground(
-            theme: themeProvider.appTheme, // اصلاح‌شده: appTheme به‌جای currentAppTheme
+            theme: themeProvider.appTheme,
             speedMultiplier: _isTyping ? 2.5 : 1.0,
           ),
           Column(
