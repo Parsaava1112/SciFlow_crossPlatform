@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // این آدرس را به IP و پورت سرور خود تغییر دهید
-  static const String baseUrl = 'http://192.168.1.100:8000';
+  static const String baseUrl = 'https://sciflowa.runflare.run';
 
   /// سوال را به بک‌اند می‌فرستد و پاسخ را برمی‌گرداند.
   /// در صورت قطعی اینترنت یا خطای سرور، null برمی‌گرداند.
