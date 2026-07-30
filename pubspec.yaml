@@ -21,6 +21,7 @@ dependencies:
   math_expressions: ^2.4.0            # حل عبارات ریاضی
   provider: ^6.0.0    
   http: ^1.1.0                # مدیریت حالت
+  connectivity_plus: ^5.0.2
 
   # ---------- بسته‌های جدید ----------
   lottie: ^2.7.0                      # انیمیشن‌های Lottie
