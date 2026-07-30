@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // آدرس بک‌اند را وارد کنید (در زمان توسعه می‌تواند 10.0.2.2 برای امولاتور باشد)
-  static const String baseUrl = 'http://sciflowa.runflare.run'; // <-- IP سرور خود را بگذارید
+  static const String baseUrl = 'https://sciflowa.runflare.run'; // <-- IP سرور خود را بگذارید
 
   /// بررسی آنلاین بودن سرور با یک درخواست OPTIONS یا GET ساده
   static Future<bool> isServerOnline() async {
