@@ -5,3 +5,4 @@ torch==2.1.0
 transformers==4.36.0
 pydantic==2.5.0
 numpy==1.26.4
+sentencepiece==0.1.99   # برای مدل T5
