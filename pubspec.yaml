@@ -1,6 +1,6 @@
 name: SciFlow
 description: چت‌بات علوم تجربی
-version: 2.0.0
+version: 3.0.5
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -26,6 +26,7 @@ dependencies:
   lottie: ^2.7.0                      # انیمیشن‌های Lottie
   shimmer: ^3.0.0                     # افکت بارگذاری
   flutter_local_notifications: ^17.0.0  # نوتیفیکیشن (یادآور هفتگی)
+  connectivity_plus: ^5.0.2
 
 dev_dependencies:
   flutter_test:

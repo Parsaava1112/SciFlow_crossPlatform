@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:math_expressions/math_expressions.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'database_helper.dart';
 import 'theme_provider.dart';
@@ -16,7 +17,7 @@ import 'particle_background.dart';
 import 'help_screen.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
-import 'services/api_service.dart'; // 👈 فایل جدید API
+import 'services/api_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String username;
@@ -34,7 +35,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   bool _isTyping = false;
   DateTime? _thinkingStart;
   bool _showScrollButton = false;
-  bool _isBackendOnline = true; // 👈 وضعیت اتصال به بک‌اند
+
+  bool _isBackendOnline = false;
+  late Timer _connectivityTimer;
 
   final List<String> _statusMessages = [
     'در حال جستجو...',
@@ -76,6 +79,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
     });
 
+    _checkBackendStatus();
+    _connectivityTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _checkBackendStatus();
+    });
+
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
@@ -87,8 +95,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     );
   }
 
+  Future<void> _checkBackendStatus() async {
+    final online = await ApiService.isServerOnline();
+    if (mounted) {
+      setState(() {
+        _isBackendOnline = online;
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _connectivityTimer.cancel();
     _bounceController.dispose();
     _scrollController.dispose();
     _messageController.dispose();
@@ -134,18 +152,25 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _bounceController.repeat(reverse: true);
     });
 
-    // 👇 اگر آفلاین است، پیام مناسب نشان بده
     if (!_isBackendOnline && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('حالت آفلاین - پاسخ‌ها از حافظه محلی خوانده می‌شوند.')),
+        SnackBar(
+          content: const Text(
+              'سرور هوشمند در دسترس نیست. پاسخ‌ها از حافظه محلی نمایش داده می‌شوند.'),
+          duration: const Duration(seconds: 3),
+        ),
       );
     }
 
     final questions = _splitQuestions(text);
     List<String> answers = [];
+    List<String> sources = [];
     for (var q in questions) {
       var result = await _processSingleQuestion(q);
-      if (result != null) answers.add(result);
+      if (result != null) {
+        answers.add(result['answer']!);
+        sources.add(result['source']!);
+      }
     }
 
     Duration thinkingDuration = DateTime.now().difference(_thinkingStart!);
@@ -153,12 +178,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         '\n⏱️ مدت زمان: ${(thinkingDuration.inMilliseconds / 1000).toStringAsFixed(2)} ثانیه';
 
     if (answers.isEmpty) {
-      // هیچ جوابی (نه از بک‌اند، نه محلی) پیدا نشد
       final newAnswer = await _showTeachDialog(text);
       if (newAnswer != null && newAnswer.isNotEmpty) {
-        await _dbHelper.addQA(text, newAnswer);
-        _addMessage(ChatMessage(text: newAnswer + timingInfo, isUser: false));
-        _dbHelper.addChatHistory(widget.username, text, newAnswer);
+        _addMessage(ChatMessage(
+            text: newAnswer + timingInfo,
+            isUser: false,
+            source: 'یادگیری ماشین'));
       } else {
         _addMessage(ChatMessage(
             text: 'متأسفم، فعلاً پاسخی برای این سوال ندارم. 🤔' + timingInfo,
@@ -166,7 +191,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       }
     } else {
       String finalAnswer = answers.join('\n\n') + timingInfo;
-      _addMessage(ChatMessage(text: finalAnswer, isUser: false));
+      String sourceLabel = sources.isNotEmpty ? sources.first : 'local';
+      _addMessage(ChatMessage(
+          text: finalAnswer, isUser: false, source: sourceLabel));
       for (int i = 0; i < questions.length && i < answers.length; i++) {
         _dbHelper.addChatHistory(widget.username, questions[i], answers[i]);
       }
@@ -189,53 +216,54 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     return [text];
   }
 
-  // 👇 متد اصلی پردازش یک سوال (تغییر کرده)
-  Future<String?> _processSingleQuestion(String question) async {
-    // 1. احوالپرسی (بدون نیاز به سرور)
+  Future<Map<String, String>?> _processSingleQuestion(String question) async {
     if (_isGreeting(question)) {
       final baseAnswer = await _dbHelper.smartSearch(question);
       if (baseAnswer != null) {
         final now = Jalali.now();
         final dateStr = '${now.day} ${now.formatter.mN} ${now.year}';
-        return '$baseAnswer\nامروز $dateStr است.';
+        return {
+          'answer': '$baseAnswer\nامروز $dateStr است.',
+          'source': 'local'
+        };
       }
       return null;
     }
 
-    // 2. تبدیل واحد و ریاضی
     String? unitResult = _tryConvertUnit(question);
-    if (unitResult != null) return unitResult;
+    if (unitResult != null) return {'answer': unitResult, 'source': 'local'};
 
     String? mathResult = _tryEvaluateMath(question);
-    if (mathResult != null) return mathResult;
+    if (mathResult != null) return {'answer': mathResult, 'source': 'local'};
 
-    // 3. تلاش برای دریافت پاسخ از بک‌اند هوشمند
     if (_isBackendOnline) {
       var backendResponse = await ApiService.askQuestion(question);
       if (backendResponse != null) {
-        // پاسخ از سرور آمد
-        return backendResponse['answer'];
+        String answer = backendResponse['answer'];
+        bool isFromDb = backendResponse['is_from_db'] ?? false;
+        return {
+          'answer': answer,
+          'source': isFromDb ? 'backend (پایگاه داده)' : 'backend (تولیدشده)'
+        };
       } else {
-        // خطا در اتصال -> آفلاین می‌شویم
-        setState(() => _isBackendOnline = false);
-        if (mounted) {
+        _checkBackendStatus();
+        if (_isBackendOnline == false && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ارتباط با سرور قطع شد. از این پس پاسخ‌ها از حافظه محلی نمایش داده می‌شوند.')),
+            const SnackBar(content: Text('ارتباط با سرور قطع شد. استفاده از حافظه محلی.')),
           );
         }
       }
     }
 
-    // 4. fallback به جستجوی محلی (در صورت آفلاین بودن)
     final localResult = await _dbHelper.smartSearchWithScore(question);
     if (localResult != null) {
       String answer = localResult['answer'];
       double score = localResult['score'];
       answer += '\n(میزان تطابق محلی: ${(score * 100).toStringAsFixed(1)}٪)';
-      return answer;
+      return {'answer': answer, 'source': 'local'};
     }
 
-    return null; // هیچ پاسخی یافت نشد
+    return null;
   }
 
   bool _isGreeting(String text) {
@@ -327,7 +355,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Future<String?> _showTeachDialog(String question) async {
     final controller = TextEditingController();
-    return showDialog<String>(
+    final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('یادگیری'),
@@ -352,6 +380,36 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         ],
       ),
     );
+
+    if (result != null && result.isNotEmpty) {
+      await _dbHelper.addQA(question, result);
+      _dbHelper.addChatHistory(widget.username, question, result);
+
+      if (_isBackendOnline) {
+        final response = await ApiService.learnQuestion(question, result);
+        if (response != null && response.containsKey('error')) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('⚠️ ${response['error']}')),
+            );
+          }
+        } else if (response != null && response['status'] == 'pending') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('✅ پاسخ شما برای بررسی ارسال شد.')),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('پاسخ در حافظه محلی ذخیره شد.')),
+          );
+        }
+      }
+      return result;
+    }
+    return null;
   }
 
   void _rateAnswer(ChatMessage msg, bool like) async {
@@ -428,6 +486,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           Column(
             children: [
               _buildAppBar(themeProvider),
+              _buildConnectivityBanner(),
               Expanded(
                 child: _messages.isEmpty
                     ? _buildWelcomeScreen(themeProvider, isDark)
@@ -480,6 +539,31 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
               ),
               _buildInputArea(bottomPadding),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectivityBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+      color: _isBackendOnline ? Colors.green.shade700 : Colors.red.shade700,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _isBackendOnline ? Icons.cloud_done : Icons.cloud_off,
+            color: Colors.white,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _isBackendOnline
+                ? 'سرور هوشمند متصل است'
+                : 'سرور در دسترس نیست - پاسخ‌ها از حافظه محلی',
+            style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
         ],
       ),
@@ -782,6 +866,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   fontSize: 11,
                 ),
               ),
+              if (!isUser && msg.source != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'منبع: ${msg.source}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: (isDark ? Colors.white70 : Colors.black45)
+                          .withOpacity(0.6),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
               if (!isUser)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -972,11 +1069,13 @@ class ChatMessage {
   final bool isUser;
   final DateTime timestamp;
   String? reaction;
+  String? source;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     DateTime? timestamp,
     this.reaction,
+    this.source,
   }) : timestamp = timestamp ?? DateTime.now();
 }
